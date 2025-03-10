@@ -11,8 +11,8 @@ app.use(cors());
 
 const SECRET_KEY = process.env.SECRET_KEY || "clave_segura";
 
-// Ruta para iniciar sesión
-app.post("/login", (req, res) => {
+// LOGIN
+app.post("/login", async (req, res) => {
     const { Usuario, Contrasena } = req.body;
 
     if (!Usuario || !Contrasena) {
@@ -20,7 +20,10 @@ app.post("/login", (req, res) => {
     }
 
     db.query("SELECT * FROM users WHERE Usuario = ?", [Usuario], async (err, results) => {
-        if (err) return res.status(500).json({ error: "Error en el servidor" });
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: "Error en el servidor" });
+        }
 
         if (results.length === 0) {
             return res.status(404).json({ error: "Usuario o contraseña incorrectos" });
@@ -32,12 +35,12 @@ app.post("/login", (req, res) => {
             return res.status(400).json({ error: "Usuario o contraseña incorrectos" });
         }
 
-        const token = jwt.sign({ id: user.id }, SECRET_KEY, { expiresIn: "2h" });
+        const token = jwt.sign({ id: user.ID_usuario }, SECRET_KEY, { expiresIn: "2h" });
         res.json({ message: "Inicio de sesión exitoso", token });
     });
 });
 
-// Ruta para registrar usuarios
+// 🚀 Esta es la definición correcta del register que también necesitas:
 app.post("/register", async (req, res) => {
     const { Usuario, Correo, Contrasena } = req.body;
 
@@ -58,7 +61,7 @@ app.post("/register", async (req, res) => {
         });
 
         if (userExists) {
-            return res.status(400).json({ error: "El usuario o correo ya existen" });
+            return res.status(400).json({ error: "Usuario o correo ya existen" });
         }
 
         const hashedPassword = await bcrypt.hash(Contrasena, 10);
@@ -81,7 +84,7 @@ app.post("/register", async (req, res) => {
     }
 });
 
-// 🚩 Ruta básica para verificar servidor
+// Ruta básica para verificar servidor
 app.get("/", (req, res) => {
     res.send("Servidor funcionando correctamente!");
 });
@@ -89,5 +92,5 @@ app.get("/", (req, res) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(` Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });

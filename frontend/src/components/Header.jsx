@@ -3,7 +3,7 @@ import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
 import notificationIcon from "../assets/campana.png"; 
-import userIcon from "../assets/usuario.png";  
+import userIcon from "../assets/usuario.png";
 
 const NavBar = styled.nav`
   background-color: #B4864D;
@@ -16,7 +16,7 @@ const NavBar = styled.nav`
   top: 0;
   left: 0;
   z-index: 100;
-  box-sizing: border-box; /* Asegura que el padding no afecte el ancho total */
+  box-sizing: border-box;
 `;
 
 const LogoImg = styled.img`
@@ -57,15 +57,16 @@ const RightSection = styled.div`
   display: flex;
   align-items: center;
   gap: 15px;
+  position: relative;
 `;
 
 const IconButton = styled.img`
-  width: 40px; /* Mismo tamaño que el logo */
-  height: 40px; /* Mismo tamaño que el logo */
+  width: 40px;
+  height: 40px;
   cursor: pointer;
 
   @media (max-width: 768px) {
-    width: 30px; /* Tamaño ligeramente menor en dispositivos móviles */
+    width: 30px;
     height: 30px;
   }
 `;
@@ -86,50 +87,80 @@ const LoginButton = styled.button`
   }
 `;
 
+const DropdownMenu = styled.div`
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  overflow: hidden;
+  z-index: 100;
+`;
+
+const DropdownMenuItem = styled.div`
+  padding: 10px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+`;
+
 const Header = ({ setHeaderHeight = () => {} }) => {
-    const headerRef = useRef(null);
-    const navigate = useNavigate();
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const headerRef = useRef(null);
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
-    useEffect(() => {
-        if (headerRef.current) {
-            setHeaderHeight(headerRef.current.offsetHeight);
-        }
-        
-        // Verificar si el usuario ha iniciado sesión
-        const token = localStorage.getItem("token");
-        setIsAuthenticated(!!token);
-    }, [setHeaderHeight]);
+  useEffect(() => {
+    if (headerRef.current) {
+      setHeaderHeight(headerRef.current.offsetHeight);
+    }
 
-    return (
-        <NavBar ref={headerRef}>
-            {/* Logo a la izquierda */}
-            <LogoImg src={logo} alt="Logo" onClick={() => navigate("/")} />
+    const token = localStorage.getItem("token");
+    setIsAuthenticated(!!token);
+  }, [setHeaderHeight]);
 
-            {/* Menú centrado */}
-            <NavContent>
-                <Menu>
-                    <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
-                    <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
-                    <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
-                </Menu>
-            </NavContent>
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsAuthenticated(false);
+    navigate("/login");
+  };
 
-            {/* Iconos alineados correctamente sin necesidad de scroll */}
-            <RightSection>
-                {isAuthenticated ? (
-                    <>
-                        <IconButton src={notificationIcon} alt="Notificaciones" />
-                        <IconButton src={userIcon} alt="Usuario" />
-                    </>
-                ) : (
-                    <LoginButton onClick={() => navigate("/login")}>
-                        Iniciar sesión
-                    </LoginButton>
-                )}
-            </RightSection>
-        </NavBar>
-    );
+  return (
+    <NavBar ref={headerRef}>
+      <LogoImg src={logo} alt="Logo" onClick={() => navigate("/")} />
+
+      <NavContent>
+        <Menu>
+          <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
+          <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
+          <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
+        </Menu>
+      </NavContent>
+
+      <RightSection>
+        {isAuthenticated ? (
+          <>
+            <IconButton src={notificationIcon} alt="Notificaciones" />
+            <IconButton src={userIcon} alt="Usuario" onClick={() => setMenuVisible(!menuVisible)} />
+            {menuVisible && (
+              <DropdownMenu>
+                <DropdownMenuItem onClick={() => navigate("/editar-datos")}>Editar datos</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>Cerrar sesión</DropdownMenuItem>
+              </DropdownMenu>
+            )}
+          </>
+        ) : (
+          <LoginButton onClick={() => navigate("/login")}>Iniciar sesión</LoginButton>
+        )}
+      </RightSection>
+    </NavBar>
+  );
 };
 
 export default Header;
