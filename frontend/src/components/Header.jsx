@@ -1,41 +1,46 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
+import notificationIcon from "../assets/campana.png"; 
+import userIcon from "../assets/usuario.png";  
 
 const NavBar = styled.nav`
   background-color: #B4864D;
   display: flex;
-  justify-content: center; /* Centra el contenido */
+  justify-content: space-between;
   align-items: center;
   padding: 10px 20px;
   position: fixed;
-  width: 100vw; 
-  left: 0; 
-  top: 0;
-  z-index: 100;
-`;
-
-const NavContent = styled.div`
-  display: flex;
-  align-items: center;
   width: 100%;
-  max-width: 1200px;  
-  margin: auto; 
+  top: 0;
+  left: 0;
+  z-index: 100;
+  box-sizing: border-box; /* Asegura que el padding no afecte el ancho total */
 `;
 
 const LogoImg = styled.img`
   width: 50px;
+  cursor: pointer;
+`;
+
+const NavContent = styled.div`
+  display: flex;
+  flex-grow: 1;
+  justify-content: center;
+  align-items: center;
 `;
 
 const Menu = styled.ul`
   display: flex;
   list-style: none;
   gap: 20px;
-  flex-grow: 1;  
-  justify-content: center; 
   margin: 0;
   padding: 0;
+
+  @media (max-width: 768px) {
+    gap: 15px;
+  }
 `;
 
 const MenuItem = styled.li`
@@ -48,6 +53,23 @@ const MenuItem = styled.li`
   }
 `;
 
+const RightSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+`;
+
+const IconButton = styled.img`
+  width: 40px; /* Mismo tamaño que el logo */
+  height: 40px; /* Mismo tamaño que el logo */
+  cursor: pointer;
+
+  @media (max-width: 768px) {
+    width: 30px; /* Tamaño ligeramente menor en dispositivos móviles */
+    height: 30px;
+  }
+`;
+
 const LoginButton = styled.button`
   padding: 10px 15px;
   background-color: white;
@@ -57,38 +79,55 @@ const LoginButton = styled.button`
   font-weight: bold;
   cursor: pointer;
   transition: background 0.3s ease-in-out;
-  white-space: nowrap; 
+  white-space: nowrap;
 
   &:hover {
     background-color: #f5f5f5;
   }
 `;
 
-const Header = ({ setHeaderHeight = () => {}, hideLoginButton = false }) => {
+const Header = ({ setHeaderHeight = () => {} }) => {
     const headerRef = useRef(null);
     const navigate = useNavigate();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
         if (headerRef.current) {
             setHeaderHeight(headerRef.current.offsetHeight);
         }
+        
+        // Verificar si el usuario ha iniciado sesión
+        const token = localStorage.getItem("token");
+        setIsAuthenticated(!!token);
     }, [setHeaderHeight]);
 
     return (
         <NavBar ref={headerRef}>
+            {/* Logo a la izquierda */}
+            <LogoImg src={logo} alt="Logo" onClick={() => navigate("/")} />
+
+            {/* Menú centrado */}
             <NavContent>
-                <LogoImg src={logo} alt="Logo" />
                 <Menu>
                     <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
                     <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
                     <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
                 </Menu>
-                {!hideLoginButton && (
+            </NavContent>
+
+            {/* Iconos alineados correctamente sin necesidad de scroll */}
+            <RightSection>
+                {isAuthenticated ? (
+                    <>
+                        <IconButton src={notificationIcon} alt="Notificaciones" />
+                        <IconButton src={userIcon} alt="Usuario" />
+                    </>
+                ) : (
                     <LoginButton onClick={() => navigate("/login")}>
                         Iniciar sesión
                     </LoginButton>
                 )}
-            </NavContent>
+            </RightSection>
         </NavBar>
     );
 };

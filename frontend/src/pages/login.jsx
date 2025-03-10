@@ -93,8 +93,8 @@ const StyledPlanta = styled.img`
 
 const Login = () => {
   const [headerHeight, setHeaderHeight] = useState(0);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [Usuario, setUsername] = useState("");
+  const [Contrasena, setPassword] = useState("");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
 
@@ -102,7 +102,7 @@ const Login = () => {
     e.preventDefault();
     setError(null);
 
-    if (!username || !password) {
+    if (!Usuario || !Contrasena) {
       setError("⚠️ Todos los campos son obligatorios");
       return;
     }
@@ -113,7 +113,9 @@ const Login = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ 
+          Usuario, Contrasena
+        }),
       });
 
       const data = await response.json();
@@ -146,7 +148,7 @@ const Login = () => {
             <InputField
               type="text"
               placeholder="Ingresa tu usuario"
-              value={username}
+              value={Usuario}
               onChange={(e) => setUsername(e.target.value)}
             />
 
@@ -154,7 +156,7 @@ const Login = () => {
             <InputField
               type="password"
               placeholder="Ingresa tu contraseña"
-              value={password}
+              value={Contrasena}
               onChange={(e) => setPassword(e.target.value)}
             />
 

@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { Line } from "react-chartjs-2";
+import advertencia from "../assets/alerta-amarillo.png";
+import ok from "../assets/comprobado.png";
+import peligro from "../assets/sirena.png";
+import dia from "../assets/manana.png";
+import noche from "../assets/noche.png";
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,9 +21,12 @@ import {
   Legend,
 } from "chart.js";
 
-
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
+const CycleImage = styled.img`
+  width: 60px;
+  height: 60px;
+`;
 
 const Container = styled.div`
   padding: 50px 30px;
@@ -48,19 +57,23 @@ const CardTitle = styled.h3`
   z-index: 3;
 `;
 
-
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 50px;
-  margin-top: 5px;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.2);
+  z-index: 3; /* Asegura que los botones estén por encima de la máscara */
+  position: relative;
 `;
 
+
 const ModeButton = styled.button`
+  flex: 1;
+  margin: 5px;
   background: ${({ active }) => (active ? "#093609" : "#E0E2E6")};
   color: ${({ active }) => (active ? "white" : "black")};
-  font-family: "Roboto", sans-serif;
   font-weight: bold;
-  padding: 6px 18px;
+  padding: 8px 16px;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -69,7 +82,6 @@ const ModeButton = styled.button`
     color: white;
   }
 `;
-
 
 const SwitchContainer = styled.label`
   position: relative;
@@ -81,7 +93,6 @@ const SwitchContainer = styled.label`
   cursor: pointer;
 `;
 
-
 const SwitchWrapper = styled.div`
   position: relative;
   width: 48px;
@@ -90,7 +101,6 @@ const SwitchWrapper = styled.div`
   border-radius: 15px;
   transition: background-color 0.3s ease-in-out;
 `;
-
 
 const Slider = styled.div`
   position: absolute;
@@ -103,7 +113,6 @@ const Slider = styled.div`
   transition: left 0.3s ease-in-out;
 `;
 
-
 const HiddenCheckbox = styled.input`
   opacity: 0;
   width: 0;
@@ -111,7 +120,7 @@ const HiddenCheckbox = styled.input`
   position: absolute;
 `;
 
-const CustomSwitch = ({ checked, onChange }) => {
+const CustomSwitch = ({ checked, onChange, disabled }) => {
   return (
     <SwitchContainer>
       <span>{checked ? "ON" : "OFF"}</span>
@@ -119,6 +128,7 @@ const CustomSwitch = ({ checked, onChange }) => {
         type="checkbox"
         checked={checked}
         onChange={() => onChange(!checked)}
+        disabled={disabled}
       />
       <SwitchWrapper checked={checked}>
         <Slider checked={checked} />
@@ -127,17 +137,15 @@ const CustomSwitch = ({ checked, onChange }) => {
   );
 };
 
-
 const Card = styled.div`
   background: rgba(123, 95, 61, 0.8);
-  box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5), /* Sombra interna */
-              10px 10px 20px rgba(245, 239, 230, 0.2); /* Sombra externa */
-  backdrop-filter: blur(10000px); /* Suaviza el fondo */
-  filter: drop-shadow(5px 5px 10px rgba(248, 202, 132, 3)); /* Efecto de profundidad */
-  border: 1px solid rgba(248, 216, 186, 0.25); /* Borde suave */
-  opacity: 1.2; /* Transparencia ligera */
-  position: relative; /* Permite que el botón se posicione dentro */
-  padding: 10px;
+  box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5), 
+              10px 10px 20px rgba(245, 239, 230, 0.2);
+  backdrop-filter: blur(10000px); 
+  filter: drop-shadow(5px 5px 10px rgba(248, 202, 132, 3)); 
+  border: 1px solid rgba(248, 216, 186, 0.25); 
+  opacity: 1.2; 
+  position: relative;
   border-radius: 15px;
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
   position: relative;
@@ -150,7 +158,6 @@ const Card = styled.div`
   align-items: center;
   gap: -81px;
   justify-content: center; 
-
 `;
 
 const MiniCard = styled.div`
@@ -163,7 +170,6 @@ const MiniCard = styled.div`
   width: 100%;
   margin-bottom: 10px;
 `;
-
 
 const Column = styled.div`
   display: flex;
@@ -179,7 +185,6 @@ const RightColumn = styled(Column)`
   justify-content: space-between;
   height: 90%;
 `;
-
 
 const ControlPanel = styled(Card)`
   background: rgba(123, 95, 61, 0.8);
@@ -203,28 +208,34 @@ const ControlPanel = styled(Card)`
   gap: 15px;
 `;
 
-const DisabledOverlay = styled.div`
+
+const Overlay = styled.div`
   position: absolute;
-  top: 0;
+  top: 60px;
   left: 0;
   width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  height: calc(100% - 60px); 
+  background: rgba(0, 0, 0, 0.5); /* Capa negra semitransparente */
   border-radius: 15px;
-  display: ${({ disabled }) => (disabled ? "block" : "none")};
+  display: ${({ active }) => (active ? "block" : "none")};
+  z-index: 2;
+`;
+
+const Content = styled.div`
+  position: relative;
+  z-index: 2; /* Para que el contenido esté encima de la máscara */
 `;
 
 const ControlButton = styled.button`
-  background: #4caf50;
+  background: ${({ disabled }) => (disabled ? "#ccc" : "#000")};
   border: none;
   color: white;
   padding: 10px;
   font-size: 14px;
-  cursor: pointer;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   border-radius: 8px;
 `;
 
-// Contenedor de Gráficas 
 const ChartContainer = styled.div`
   background: white;
   padding: 15px;
@@ -237,14 +248,13 @@ const ChartContainer = styled.div`
   margin-top: 30px;
 `;
 
-// Estado General
 const StatusPanel = styled(Card)`
-  background: rgba(123, 95, 61, 0.8);
-  box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5), 
-              10px 10px 20px rgba(245, 239, 230, 0.2); 
+  background: rgba(123, 95, 61, 0.51);
+  box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.53), 
+              10px 10px 20px rgba(245, 239, 230, 0.52); 
   backdrop-filter: blur(10000px); 
   filter: drop-shadow(5px 5px 10px rgba(248, 202, 132, 3)); 
-  border: 1px solid rgba(248, 216, 186, 0.25); 
+  border: 1px solid rgba(248, 216, 186, 0.4); 
   opacity: 1.2; 
   position: relative; 
   padding: 20px;
@@ -261,6 +271,7 @@ const StatusItem = styled.div`
   justify-content: space-between;
   font-size: 18px;
   font-weight: bold;
+  opacity: 90%; 
   background: ${({ color }) => color || "gray"};
   padding: 10px;
   border-radius: 10px;
@@ -268,12 +279,15 @@ const StatusItem = styled.div`
   color: white;
 `;
 
-// Rango de temperatura
+const StatusImage = styled.img`
+  width: 40px;
+  height: 40px;
+`;
+
 const MIN_TEMP = 20; 
 const MAX_TEMP = 100; 
 const STEP = 5; 
 
-// Contenedor del Slider
 const SliderContainer = styled.div`
   width: 90%;
   height: 12px;
@@ -286,7 +300,6 @@ const SliderContainer = styled.div`
   margin-top: 20px;
 `;
 
-// Barra de Progreso del Slider
 const ProgressBar = styled.div`
   height: 100%;
   background: #4caf50;
@@ -295,7 +308,6 @@ const ProgressBar = styled.div`
   transition: width 0.3s ease-out;
 `;
 
-//  Círculo Deslizante
 const SliderCircle = styled.div`
   width: 22px;
   height: 22px;
@@ -311,7 +323,6 @@ const SliderCircle = styled.div`
   cursor: grab;
 `;
 
-// Rayitas en el Slider
 const MarkersContainer = styled.div`
   position: absolute;
   width: 100%;
@@ -344,26 +355,33 @@ const Marker = styled.div`
   }
 `;
 
-const CustomSlider = ({ value, onChange }) => {
+const CustomSlider = ({ value, onChange, disabled }) => {
   const [dragging, setDragging] = useState(false);
 
   const handleMouseDown = () => {
-    setDragging(true);
+    if (!disabled) setDragging(true);
   };
 
-  const handleMouseMove = (e) => {
-    if (!dragging) return;
-
+  const handleMouseMove = useCallback((e) => {
+    if (!dragging || disabled) return;
+  
     const rect = e.target.parentElement.getBoundingClientRect();
     const percent = ((e.clientX - rect.left) / rect.width) * 100;
     let newValue =
       MIN_TEMP + Math.round(((percent / 100) * (MAX_TEMP - MIN_TEMP)) / STEP) * STEP;
-
-    // Asegurar que el valor esté dentro del rango
+  
     newValue = Math.max(MIN_TEMP, Math.min(MAX_TEMP, newValue));
-
+  
     onChange(newValue);
-  };
+  }, [dragging, onChange, disabled]); 
+
+  useEffect(() => {
+    document.addEventListener("mousemove", handleMouseMove);
+    
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [handleMouseMove]); 
 
   const handleMouseUp = () => {
     setDragging(false);
@@ -396,7 +414,8 @@ const Dashboard = () => {
   const [luzVisible, setLuzVisible] = useState(false);
   const [luzUV, setLuzUV] = useState(true);
   const [humidificador, setHumidificador] = useState(false);
-  const [cicloDia, setCicloDia] = useState("mañana");
+  const [mudaPiel, setMudaPiel] = useState(false);
+  const [cicloDia, setCicloDia] = useState("dia");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -405,12 +424,15 @@ const Dashboard = () => {
     }
 
     const hora = new Date().getHours();
-    if (hora >= 6 && hora < 12) setCicloDia("mañana");
-    else if (hora >= 12 && hora < 18) setCicloDia("tarde");
+    if (hora >= 6 && hora < 18) setCicloDia("dia");
     else setCicloDia("noche");
   }, [navigate]);
 
-  // Datos de gráficas
+  const cicloImagenes = {
+    dia: dia,
+    noche: noche,
+  };
+
   const chartData = (label, data, color) => ({
     labels: ["6 AM", "9 AM", "12 PM", "3 PM", "6 PM", "9 PM"],
     datasets: [{ label, data, borderColor: color, backgroundColor: `${color}50` }],
@@ -420,7 +442,6 @@ const Dashboard = () => {
     <>
       <Header showUserIcon={true} />
       <Container>
-        {/* Columna Izquierda */}
         <Column>
           <Card>
             <CardTitle>Temperatura</CardTitle>
@@ -443,7 +464,6 @@ const Dashboard = () => {
           </Card>
         </Column>
 
-        {/* Columna Central */}
         <CenterColumn>
           <ChartContainer>
             <Line data={chartData("Temperatura", [27, 28, 29, 30, 29, 28], "#FF9800")} />
@@ -456,58 +476,70 @@ const Dashboard = () => {
           </ChartContainer>
         </CenterColumn>
 
-       {/* Columna Derecha */}
-       <RightColumn>
+        <RightColumn>
+        
           <ControlPanel>
-            <CardTitle>Panel de Control</CardTitle>
-            <ButtonGroup>
-              <ModeButton
-                active={!modoAutomatico} 
-                onClick={() => setModoAutomatico(false)} 
-              >
-                Modo Manual
-              </ModeButton>
-              <ModeButton
-                active={modoAutomatico} 
-                onClick={() => setModoAutomatico(true)} 
-              >
-                Modo Automático
-              </ModeButton>
-            </ButtonGroup>
+          <CardTitle>Panel de Control</CardTitle>
+             {/* Sección de selección de modo DENTRO del panel */}
+             <ButtonGroup>
+            <ModeButton active={!modoAutomatico} onClick={() => setModoAutomatico(false)}>
+              Modo Manual
+            </ModeButton>
+            <ModeButton active={modoAutomatico} onClick={() => setModoAutomatico(true)}>
+              Modo Automático
+            </ModeButton>
+          </ButtonGroup>
+            {/* Capa negra transparente en modo automático */}
+            <Overlay active={modoAutomatico} />
+            <Content>
+          <h4>🔥 Placa Térmica</h4>
+            <CustomSlider value={placaTermica} onChange={setPlacaTermica} disabled={modoAutomatico} />
+            <p>{Math.round(placaTermica)}%</p>
 
-            <MiniCard>
-              <h3>💡 Luz Visible</h3>
-              <CustomSwitch checked={luzVisible} onChange={setLuzVisible} />
-            </MiniCard>
-
-            <MiniCard>
-              <h3>☀️ Luz UV</h3>
-              <CustomSwitch checked={luzUV} onChange={setLuzUV} />
-            </MiniCard>
+            <div style={{ display: "flex", gap: "20px", width: "100%", justifyContent: "space-between" }}>
+              <MiniCard style={{ flex: 1 }}>
+                <h3>Luz Visible</h3>
+                <CustomSwitch checked={luzVisible} onChange={setLuzVisible} disabled={modoAutomatico} />
+              </MiniCard>
+              <MiniCard style={{ flex: 1 }}>
+                <h3>Luz UV</h3>
+                <CustomSwitch checked={luzUV} onChange={setLuzUV} disabled={modoAutomatico} />
+              </MiniCard>
+            </div>
 
             <ControlButton onClick={() => setHumidificador(!humidificador)} disabled={modoAutomatico}>
-              ACTIVAR
+              {humidificador ? "DESACTIVAR HUMIDIFICADOR" : "ACTIVAR HUMIDIFICADOR"}
             </ControlButton>
-            <h4>🔥 Placa Térmica</h4>
-            <CustomSlider value={placaTermica} onChange={setPlacaTermica} />
-            <p>{Math.round(placaTermica)}%</p>
-            <DisabledOverlay disabled={modoAutomatico} />
-            
-          </ControlPanel>
+
+            <ControlButton onClick={() => setMudaPiel(!mudaPiel)} disabled={modoAutomatico}>
+              {mudaPiel ? "DESACTIVAR MUDA DE PIEL" : "ACTIVAR MUDA DE PIEL"}
+            </ControlButton>
+            </Content>
+        </ControlPanel>
 
           <StatusPanel>
             <CardTitle>Estado General</CardTitle>
             <MiniCard>
-              <p>🌞 Ciclo del Día: {cicloDia}</p>
+              <p>Ciclo : {cicloDia}</p>
+              <CycleImage src={cicloImagenes[cicloDia]} alt={`Ciclo ${cicloDia}`} />
             </MiniCard>
             <MiniCard>
-              <StatusItem color="green">✅ Temperatura: Todo en orden</StatusItem>
+              <StatusItem color="green">
+                <span>Temperatura: Todo en orden</span>
+                <StatusImage src={ok} alt="Temperatura Normal" />
+              </StatusItem>
             </MiniCard>
             <MiniCard>
-              <StatusItem color="orange">⚠️ Iluminación: Necesita ajuste</StatusItem>
+              <StatusItem color="orange">
+                <span>Iluminación: Necesita ajuste</span>
+                <StatusImage src={advertencia} alt="Humedad Baja" />
+              </StatusItem>
             </MiniCard>
             <MiniCard>
-              <StatusItem color="red">❌ Humedad: Necesita atención</StatusItem>
+              <StatusItem color="red">
+                <span>Humedad: Necesita atención</span>
+                <StatusImage src={peligro} alt="Humedad Baja" />
+              </StatusItem>
             </MiniCard>
           </StatusPanel>
         </RightColumn>
