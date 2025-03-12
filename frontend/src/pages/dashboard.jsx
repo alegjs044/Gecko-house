@@ -425,7 +425,7 @@ const Dashboard = () => {
           <Card>
             <CardTitle>Temperatura</CardTitle>
             <MiniCard>
-              <p>🌡️ Mínima: 29°C</p>
+              <p>🌡️ Mínima: 22°C </p>
               <p>🌡️ Máxima: 32°C</p>
             </MiniCard>
           </Card>

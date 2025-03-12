@@ -5,6 +5,7 @@ import Login from "./pages/login";
 import Register from "./pages/register"; 
 import Dashboard from "./pages/dashboard";
 import Recuperar from "./pages/recuperar";
+import PruebasNotificaciones from "./pages/pruebasNotificaciones";
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="/recuperar" element={<Recuperar/>} />
         <Route path="/register" element={<Register />} /> 
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/pruebas_notificaciones" element={<PruebasNotificaciones/>}/>
       </Routes>
     </Router>
   );
