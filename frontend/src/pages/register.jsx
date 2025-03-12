@@ -75,9 +75,9 @@ const StyledPlanta = styled.img`
 
 const Register = () => {
   const [headerHeight, setHeaderHeight] = useState(0);
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [Usuario, setUsername] = useState("");
+  const [Correo, setEmail] = useState("");
+  const [Contrasena, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -86,12 +86,12 @@ const Register = () => {
     e.preventDefault();
     setError(null);
 
-    if (!username || !email || !password || !confirmPassword) {
+    if (!Usuario || !Correo || !Contrasena || !confirmPassword) {
       setError("Todos los campos son obligatorios");
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (Contrasena!== confirmPassword) {
       setError("Las contraseñas no coinciden");
       return;
     }
@@ -102,7 +102,9 @@ const Register = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ 
+          Usuario, Correo, Contrasena
+        }),
       });
 
       const data = await response.json();
@@ -134,7 +136,7 @@ const Register = () => {
             <InputField
               type="text"
               placeholder="Ingresa tu usuario"
-              value={username}
+              value={Usuario}
               onChange={(e) => setUsername(e.target.value)}
             />
 
@@ -142,7 +144,7 @@ const Register = () => {
             <InputField
               type="email"
               placeholder="Ingresa tu correo"
-              value={email}
+              value={Correo}
               onChange={(e) => setEmail(e.target.value)}
             />
 
@@ -150,7 +152,7 @@ const Register = () => {
             <InputField
               type="password"
               placeholder="Ingresa tu contraseña"
-              value={password}
+              value={Contrasena}
               onChange={(e) => setPassword(e.target.value)}
             />
 

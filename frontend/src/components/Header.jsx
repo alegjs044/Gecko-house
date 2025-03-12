@@ -1,41 +1,46 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
+import notificationIcon from "../assets/campana.png"; 
+import userIcon from "../assets/usuario.png";
 
 const NavBar = styled.nav`
   background-color: #B4864D;
   display: flex;
-  justify-content: center; /* Centra el contenido */
+  justify-content: space-between;
   align-items: center;
   padding: 10px 20px;
   position: fixed;
-  width: 100vw; 
-  left: 0; 
-  top: 0;
-  z-index: 100;
-`;
-
-const NavContent = styled.div`
-  display: flex;
-  align-items: center;
   width: 100%;
-  max-width: 1200px;  
-  margin: auto; 
+  top: 0;
+  left: 0;
+  z-index: 100;
+  box-sizing: border-box;
 `;
 
 const LogoImg = styled.img`
   width: 50px;
+  cursor: pointer;
+`;
+
+const NavContent = styled.div`
+  display: flex;
+  flex-grow: 1;
+  justify-content: center;
+  align-items: center;
 `;
 
 const Menu = styled.ul`
   display: flex;
   list-style: none;
   gap: 20px;
-  flex-grow: 1;  
-  justify-content: center; 
   margin: 0;
   padding: 0;
+
+  @media (max-width: 768px) {
+    gap: 15px;
+  }
 `;
 
 const MenuItem = styled.li`
@@ -48,6 +53,24 @@ const MenuItem = styled.li`
   }
 `;
 
+const RightSection = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  position: relative;
+`;
+
+const IconButton = styled.img`
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+
+  @media (max-width: 768px) {
+    width: 30px;
+    height: 30px;
+  }
+`;
+
 const LoginButton = styled.button`
   padding: 10px 15px;
   background-color: white;
@@ -57,40 +80,87 @@ const LoginButton = styled.button`
   font-weight: bold;
   cursor: pointer;
   transition: background 0.3s ease-in-out;
-  white-space: nowrap; 
+  white-space: nowrap;
 
   &:hover {
     background-color: #f5f5f5;
   }
 `;
 
-const Header = ({ setHeaderHeight = () => {}, hideLoginButton = false }) => {
-    const headerRef = useRef(null);
-    const navigate = useNavigate();
+const DropdownMenu = styled.div`
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background-color: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  overflow: hidden;
+  z-index: 100;
+`;
 
-    useEffect(() => {
-        if (headerRef.current) {
-            setHeaderHeight(headerRef.current.offsetHeight);
-        }
-    }, [setHeaderHeight]);
+const DropdownMenuItem = styled.div`
+  padding: 10px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 
-    return (
-        <NavBar ref={headerRef}>
-            <NavContent>
-                <LogoImg src={logo} alt="Logo" />
-                <Menu>
-                    <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
-                    <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
-                    <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
-                </Menu>
-                {!hideLoginButton && (
-                    <LoginButton onClick={() => navigate("/login")}>
-                        Iniciar sesión
-                    </LoginButton>
-                )}
-            </NavContent>
-        </NavBar>
-    );
+  &:hover {
+    background-color: #f0f0f0;
+  }
+`;
+
+const Header = ({ setHeaderHeight = () => {} }) => {
+  const headerRef = useRef(null);
+  const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  useEffect(() => {
+    if (headerRef.current) {
+      setHeaderHeight(headerRef.current.offsetHeight);
+    }
+
+    const token = localStorage.getItem("token");
+    setIsAuthenticated(!!token);
+  }, [setHeaderHeight]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setIsAuthenticated(false);
+    navigate("/login");
+  };
+
+  return (
+    <NavBar ref={headerRef}>
+      <LogoImg src={logo} alt="Logo" onClick={() => navigate("/")} />
+
+      <NavContent>
+        <Menu>
+          <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
+          <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
+          <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
+        </Menu>
+      </NavContent>
+
+      <RightSection>
+        {isAuthenticated ? (
+          <>
+            <IconButton src={notificationIcon} alt="Notificaciones" />
+            <IconButton src={userIcon} alt="Usuario" onClick={() => setMenuVisible(!menuVisible)} />
+            {menuVisible && (
+              <DropdownMenu>
+                <DropdownMenuItem onClick={() => navigate("/editar-datos")}>Editar datos</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>Cerrar sesión</DropdownMenuItem>
+              </DropdownMenu>
+            )}
+          </>
+        ) : (
+          <LoginButton onClick={() => navigate("/login")}>Iniciar sesión</LoginButton>
+        )}
+      </RightSection>
+    </NavBar>
+  );
 };
 
 export default Header;

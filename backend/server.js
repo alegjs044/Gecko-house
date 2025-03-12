@@ -11,6 +11,7 @@ app.use(cors());
 
 const SECRET_KEY = process.env.SECRET_KEY || "clave_segura";
 
+
 // LOGIN
 app.post("/login", async (req, res) => {
     const { Usuario, Contrasena } = req.body;
@@ -89,7 +90,7 @@ app.get("/", (req, res) => {
     res.send("Servidor funcionando correctamente!");
 });
 
-v
+
 //---------------------NOTIFICACIONES-------------------------------
 
 // Usa las variables de entorno para la configuración
@@ -153,6 +154,9 @@ app.post("/send-email", async (req, res) => {
 
 
 //  **Iniciar el servidor**
+
+// Iniciar servidor
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
