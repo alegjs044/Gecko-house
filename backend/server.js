@@ -40,7 +40,7 @@ app.post("/login", async (req, res) => {
     });
 });
 
-// 🚀 Esta es la definición correcta del register que también necesitas:
+// Esta es la definición correcta del register que también necesitas:
 app.post("/register", async (req, res) => {
     const { Usuario, Correo, Contrasena } = req.body;
 
@@ -92,5 +92,5 @@ app.get("/", (req, res) => {
 // Iniciar servidor
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
