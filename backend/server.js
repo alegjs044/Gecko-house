@@ -4,6 +4,8 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("./db");
+const nodemailer = require("nodemailer");
+const { jwtDecode } = require("jwt-decode");
 
 const app = express();
 app.use(express.json());
@@ -36,7 +38,8 @@ app.post("/login", async (req, res) => {
             return res.status(400).json({ error: "Usuario o contraseña incorrectos" });
         }
 
-        const token = jwt.sign({ id: user.ID_usuario }, SECRET_KEY, { expiresIn: "2h" });
+        const token = jwt.sign({ id: user.ID_usuario, email: user.Correo, user: user.Usuario}, SECRET_KEY, { expiresIn: "2h" });
+        console.log(token);
         res.json({ message: "Inicio de sesión exitoso", token });
     });
 });
@@ -85,10 +88,75 @@ app.post("/register", async (req, res) => {
     }
 });
 
+//--------------------EDITAR DATOS DEL USUARIO-------------------------------------
+app.post("/edit-user", async (req, res) => {
+  const { Usuario, Contrasena, token } = req.body;
+  console.log(Usuario, Contrasena);
+  let username = '';
+  let correo = '';
+
+  if (!token) {
+    return res.status(401).json({ error: "No se proporcionó token de autenticación" });
+  }
+
+  try {
+    // Decodificar el token recibido del cliente
+    const decoded = jwtDecode(token);
+    username = decoded.user;
+    correo = decoded.email;
+    
+    console.log("Token decodificado:", decoded);
+
+    if (!Usuario || !Contrasena) {
+      return res.status(400).json({ error: "Todos los campos son obligatorios" });
+    }
+
+    // Verificar si el usuario existe
+    const userExists = await new Promise((resolve, reject) => {
+      db.query(
+        "SELECT * FROM users WHERE Usuario = ? AND Correo = ?",
+        [username, correo],
+        (err, results) => {
+          if (err) reject(err);
+          // Cambio de results.length < 0 a results.length === 0
+          // La condición original siempre es falsa porque length nunca es menor que 0
+          resolve(results.length === 0);
+        }
+      );
+    });
+
+    if (userExists) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const hashedPassword = await bcrypt.hash(Contrasena, 10);
+
+    db.query(
+      "UPDATE users SET Contrasena = ?, Usuario = ? WHERE Correo = ?",
+      [hashedPassword, Usuario, correo],
+      (err, result) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: "Error al editar usuario" });
+        }
+
+        res.status(200).json({ message: "Usuario modificado con éxito" });
+      }
+    );
+  } catch (error) {
+    console.error("Error al decodificar token:", error);
+    res.status(401).json({ error: "Token inválido" });
+  }
+});
+
+
 // Ruta básica para verificar servidor
 app.get("/", (req, res) => {
     res.send("Servidor funcionando correctamente!");
 });
+
+
+//---------------------HISTORIAL DE DATOS-------------------------------
 
 
 //---------------------NOTIFICACIONES-------------------------------
