@@ -1,4 +1,7 @@
 import { useState, useEffect } from 'react';
+// Importamos axios para hacer peticiones HTTP a nuestra API
+import axios from "axios";
+import {jwtDecode} from "jwt-decode";
 
 const TemperaturaAlert = ({ temperatura, setTemperatura }) => {
   // Estado para el valor del input separado del valor actual de temperatura
@@ -52,6 +55,16 @@ const TemperaturaAlert = ({ temperatura, setTemperatura }) => {
   const handleInputChange = (e) => {
     setInputValue(e.target.value);
   };
+
+   const token = localStorage.getItem("token");
+
+   let ID_usuario = '';
+    
+    if (token) {
+      const decoded = jwtDecode(token); // Necesitas la librería jwt-decode
+      ID_usuario = decoded.id;
+    }
+  
   
   // Función para actualizar la temperatura cuando se presiona el botón
   const handleUpdateTemperature = () => {
@@ -60,13 +73,68 @@ const TemperaturaAlert = ({ temperatura, setTemperatura }) => {
     // Verificar que es un número válido
     if (!isNaN(newTemperatura)) {
       setTemperatura(newTemperatura);
+      enviarTemperatura(ID_usuario,newTemperatura,'FRIA',new Date().toISOString().slice(0, 19).replace('T', ' '));
     } else {
       setAlertStatus('Por favor ingrese un número válido');
       setTimeout(() => setAlertStatus(''), 3000);
     }
   };
   
+  const enviarTemperatura = async (ID_usuario, temperatura, Zona, Marca_tiempo) => {
+    try {
+      // Verificar que todos los datos requeridos estén presentes
+      if (!ID_usuario || !temperatura || !Zona || !Marca_tiempo) {
+        console.error('Datos incompletos:', { ID_usuario, temperatura, Zona, Marca_tiempo });
+        throw new Error('Todos los campos son obligatorios');
+      }
+      
+      console.log('Intentando enviar datos al servidor:', {
+        ID_usuario,
+        Medicion: temperatura,
+        Zona,
+        Marca_tiempo
+      });
+      
+      // Establecer un timeout para la solicitud
+      const response = await axios.post(
+        'http://localhost:5000/api/addtemperatura',
+        {
+          ID_usuario: ID_usuario,
+          Medicion: temperatura,
+          Zona: Zona,
+          Marca_tiempo: Marca_tiempo
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 10000 // 10 segundos de timeout
+        }
+      );
+  
+      console.log('Respuesta exitosa del servidor:', response.data);
+      return response.data;
+    } catch (error) {
+      // Manejo detallado de errores
+      if (error.response) {
+        // El servidor respondió con un error
+        console.error(`Error del servidor (${error.response.status}):`, error.response.data);
+        alert(`Error del servidor: ${error.response.status} - ${error.response.data.error || 'Error desconocido'}`);
+      } else if (error.request) {
+        // No se recibió respuesta
+        console.error('No se recibió respuesta del servidor. Verifique que el servidor esté en ejecución.');
+        alert('No fue posible conectar con el servidor. Verifique su conexión e intente nuevamente.');
+      } else {
+        // Error en la configuración de la solicitud
+        console.error('Error al configurar la solicitud:', error.message);
+        alert(`Error: ${error.message}`);
+      }
+      
+      // Intento de reconexión automática (opcional)
+      return false; // Indica que hubo un error
+    }
+  };
+  
   useEffect(() => {
+
     // Solo enviar alerta si la temperatura es válida (no NaN)
     if (isNaN(temperatura)) return;
     

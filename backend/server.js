@@ -6,6 +6,9 @@ const jwt = require("jsonwebtoken");
 const db = require("./db");
 const nodemailer = require("nodemailer");
 const { jwtDecode } = require("jwt-decode");
+// Importar el controlador de temperatura
+const temperaturaController = require('./Controllers/ControllerTemperatura');
+
 
 const app = express();
 app.use(express.json());
@@ -89,6 +92,7 @@ app.post("/register", async (req, res) => {
 });
 
 //--------------------EDITAR DATOS DEL USUARIO-------------------------------------
+// Actualización en server.js - Función edit-user
 app.post("/edit-user", async (req, res) => {
   const { Usuario, Contrasena, token } = req.body;
   console.log(Usuario, Contrasena);
@@ -104,6 +108,7 @@ app.post("/edit-user", async (req, res) => {
     const decoded = jwtDecode(token);
     username = decoded.user;
     correo = decoded.email;
+    const userId = decoded.id;
     
     console.log("Token decodificado:", decoded);
 
@@ -118,8 +123,6 @@ app.post("/edit-user", async (req, res) => {
         [username, correo],
         (err, results) => {
           if (err) reject(err);
-          // Cambio de results.length < 0 a results.length === 0
-          // La condición original siempre es falsa porque length nunca es menor que 0
           resolve(results.length === 0);
         }
       );
@@ -140,7 +143,17 @@ app.post("/edit-user", async (req, res) => {
           return res.status(500).json({ error: "Error al editar usuario" });
         }
 
-        res.status(200).json({ message: "Usuario modificado con éxito" });
+        // Generar un nuevo token con el nombre de usuario actualizado
+        const newToken = jwt.sign(
+          { id: userId, email: correo, user: Usuario }, 
+          SECRET_KEY, 
+          { expiresIn: "2h" }
+        );
+
+        res.status(200).json({ 
+          message: "Usuario modificado con éxito",
+          token: newToken  // Enviamos el nuevo token al cliente
+        });
       }
     );
   } catch (error) {
@@ -154,9 +167,6 @@ app.post("/edit-user", async (req, res) => {
 app.get("/", (req, res) => {
     res.send("Servidor funcionando correctamente!");
 });
-
-
-//---------------------HISTORIAL DE DATOS-------------------------------
 
 
 //---------------------NOTIFICACIONES-------------------------------
@@ -220,6 +230,11 @@ app.post("/send-email", async (req, res) => {
   }
 });
 
+
+// ControllerTempertura (rutas temperatura) --> CRUD BD DE TEMPERATURA
+app.get("/api/temperatura", temperaturaController.getTemperatura);
+app.post("/api/addtemperatura", temperaturaController.addTemperatura);
+app.delete("/api/temperatura/:ID_temperatura", temperaturaController.deleteTemperatura);
 
 //  **Iniciar el servidor**
 

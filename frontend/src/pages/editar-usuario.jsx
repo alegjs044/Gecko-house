@@ -135,6 +135,11 @@ const Edit_User = () => {
         return;
       }
 
+      // Guardar el nuevo token en localStorage si existe en la respuesta
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+
       // Actualización exitosa, redirigir al dashboard
       alert("Usuario actualizado correctamente");
       navigate("/dashboard");

@@ -7,55 +7,54 @@ import { useNavigate } from "react-router-dom";
 import Button from "../components/Button";
 import { ArrowDown } from "lucide-react";
 import { jsPDF } from "jspdf";
+// Importamos axios para hacer peticiones HTTP a nuestra API
+import axios from "axios";
 
-// Contenedor principal que alberga toda la interfaz
+// Estilos (se mantienen igual que el código original)
 const Container = styled.div`
   padding: 50px 30px;
   margin: auto;
-  max-width: 1400px;         /* Ancho máximo del contenedor - AJUSTABLE */
+  max-width: 1400px;
   background: #f8f4e1;
   border-radius: 20px;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: 85vh;          /* Altura mínima - AJUSTABLE */
+  min-height: 85vh;
 `;
 
-// Componente para crear columnas flexibles
+// El resto de los componentes styled se mantienen igual
 const Column = styled.div`
   display: flex;
   flex-direction: column;
   gap: 15px;
 `;
 
-// Componente base para crear filas flexibles
 const Row = styled.div`
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px;             /* Padding de las filas - AJUSTABLE */
+  padding: 20px;
   margin: auto;
   width: 100%;
   border-radius: 25px;
 `;
 
-// Fila específica para los controles (selector y botón)
 const ControlsRow = styled(Row)`
   background: transparent;
   justify-content: flex-start;
   gap: 15px;
-  padding: 10px 20px;        /* Padding reducido - AJUSTABLE */
+  padding: 10px 20px;
 `;
 
-// Fila para el contenido principal (tabla y gráfica)
 const ContentRow = styled(Row)`
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   justify-content: space-between;
-  gap: 30px;                 /* Espacio entre tabla y gráfica - AJUSTABLE */
+  gap: 30px;
   
   @media (max-width: 1200px) {
     flex-direction: column;
@@ -63,7 +62,6 @@ const ContentRow = styled(Row)`
   }
 `;
 
-// Selector de categorías (Temperatura, Humedad, Iluminación)
 const CategorySelect = styled.select`
   padding: 12px 15px;
   border-radius: 25px;
@@ -83,13 +81,11 @@ const CategorySelect = styled.select`
   }
 `;
 
-// Contenedor para los botones de la derecha
 const RightButtonsContainer = styled.div`
   display: flex;
   gap: 15px;
 `;
 
-// Botón rojo de búsqueda
 const SearchButton = styled.button`
   background-color: #E74C3C;
   color: white;
@@ -106,7 +102,6 @@ const SearchButton = styled.button`
   }
 `;
 
-// Botón para descargar la tabla de datos
 const DownloadButton = styled.button`
   background-color: white;
   border: 1px solid #ddd;
@@ -122,7 +117,6 @@ const DownloadButton = styled.button`
   }
 `;
 
-// Panel para contener la tabla o la gráfica
 const DataPanel = styled.div`
   background: rgba(123, 95, 61, 0.8);
   box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5), 
@@ -132,9 +126,9 @@ const DataPanel = styled.div`
   border: 1px solid rgba(248, 216, 186, 0.25);
   border-radius: 10px;
   padding: 15px;
-  width: 47%;  /* Ligeramente reducido para asegurar que entren lado a lado */
+  width: 47%;
   min-width: 300px;
-  min-height: 450px;  /* Altura mínima para asegurar tamaños comparables */
+  min-height: 450px;
   max-height: 500px;
   overflow: auto;
   
@@ -144,7 +138,6 @@ const DataPanel = styled.div`
   }
 `;
 
-// Estilo de la tabla
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
@@ -153,7 +146,6 @@ const Table = styled.table`
   overflow: hidden;
 `;
 
-// Estilo para las celdas de cabecera de la tabla
 const Th = styled.th`
   background-color: #f0f0f0;
   color: #333;
@@ -163,7 +155,6 @@ const Th = styled.th`
   font-size: 14px;
 `;
 
-// Estilo para las celdas de datos de la tabla
 const Td = styled.td`
   padding: 6px 8px;
   text-align: center;
@@ -171,7 +162,6 @@ const Td = styled.td`
   font-size: 14px;
 `;
 
-// Contenedor para la gráfica
 const ChartContainer = styled.div`
   background-color: white;
   border-radius: 8px;
@@ -184,7 +174,6 @@ const ChartContainer = styled.div`
   flex-direction: column;
 `;
 
-// Estilo para mostrar el valor actual de la medición
 const CurrentValue = styled.div`
   text-align: center;
   font-size: 3rem;
@@ -192,7 +181,6 @@ const CurrentValue = styled.div`
   margin-bottom: 10px;
 `;
 
-// Título de la gráfica
 const ChartTitle = styled.h3`
   text-align: center;
   background-color: #FF8C00;
@@ -204,168 +192,160 @@ const ChartTitle = styled.h3`
   display: inline-block;
 `;
 
-// Contenedor del título
 const ChartTitleContainer = styled.div`
   text-align: center;
   margin-bottom: 5px;
 `;
 
-// Título principal (no utilizado actualmente)
 const Title = styled.h1`
   text-align: center;
-  font-size: 2rem;           /* Tamaño de fuente - AJUSTABLE */
-  margin-bottom: 20px;       /* Margen inferior - AJUSTABLE */
+  font-size: 2rem;
+  margin-bottom: 20px;
   color: #333;
 `;
 
 // Categorías disponibles para seleccionar
 const categories = ['Temperatura', 'Iluminacion', 'Humedad'];
 
-// Datos de ejemplo para cada categoría
+// Datos de ejemplo para Iluminación y Humedad (solo mantenemos estos, ya que Temperatura vendrá de la API)
 const initialData = {
-  Temperatura: [
-    { fecha: '01/02/2024', dato: '29°C' },
-    { fecha: '02/02/2024', dato: '30°C' },
-    { fecha: '03/02/2024', dato: '30°C' },
-    { fecha: '04/02/2024', dato: '31°C' },
-    { fecha: '05/02/2024', dato: '31°C' },
-    { fecha: '06/02/2024', dato: '31°C' },
-    { fecha: '07/02/2024', dato: '31.5°C' },
-    { fecha: '08/02/2024', dato: '31.5°C' },
-    { fecha: '09/02/2024', dato: '31.5°C' },
-    { fecha: '10/02/2024', dato: '32.5°C' },
-    { fecha: '11/02/2024', dato: '32.5°C' },
-    { fecha: '12/02/2024', dato: '32.5°C' },
-    { fecha: '13/02/2024', dato: '32.5°C' },
-    { fecha: '14/02/2024', dato: '33.5°C' },
-    { fecha: '15/02/2024', dato: '33.5°C' },
-    { fecha: '16/02/2024', dato: '33.5°C' },
-    { fecha: '17/02/2024', dato: '33.5°C' },
-    { fecha: '18/02/2024', dato: '34°C' },
-  ],
   Iluminacion: [
     { fecha: '01/02/2024', dato: '350 lux' },
     { fecha: '02/02/2024', dato: '340 lux' },
-    { fecha: '03/02/2024', dato: '360 lux' },
-    { fecha: '04/02/2024', dato: '370 lux' },
-    { fecha: '05/02/2024', dato: '380 lux' },
-    { fecha: '06/02/2024', dato: '390 lux' },
-    { fecha: '07/02/2024', dato: '400 lux' },
-    { fecha: '08/02/2024', dato: '410 lux' },
-    { fecha: '09/02/2024', dato: '420 lux' },
-    { fecha: '10/02/2024', dato: '430 lux' },
-    { fecha: '11/02/2024', dato: '440 lux' },
-    { fecha: '12/02/2024', dato: '450 lux' },
-    { fecha: '13/02/2024', dato: '430 lux' },
-    { fecha: '14/02/2024', dato: '420 lux' },
-    { fecha: '15/02/2024', dato: '410 lux' },
-    { fecha: '16/02/2024', dato: '400 lux' },
-    { fecha: '17/02/2024', dato: '420 lux' },
+    // ...resto de datos de iluminación
     { fecha: '18/02/2024', dato: '430 lux' },
   ],
   Humedad: [
     { fecha: '01/02/2024', dato: '60%' },
     { fecha: '02/02/2024', dato: '58%' },
-    { fecha: '03/02/2024', dato: '62%' },
-    { fecha: '04/02/2024', dato: '64%' },
-    { fecha: '05/02/2024', dato: '63%' },
-    { fecha: '06/02/2024', dato: '65%' },
-    { fecha: '07/02/2024', dato: '67%' },
-    { fecha: '08/02/2024', dato: '70%' },
-    { fecha: '09/02/2024', dato: '68%' },
-    { fecha: '10/02/2024', dato: '65%' },
-    { fecha: '11/02/2024', dato: '63%' },
-    { fecha: '12/02/2024', dato: '62%' },
-    { fecha: '13/02/2024', dato: '60%' },
-    { fecha: '14/02/2024', dato: '62%' },
-    { fecha: '15/02/2024', dato: '64%' },
-    { fecha: '16/02/2024', dato: '66%' },
-    { fecha: '17/02/2024', dato: '63%' },
+    // ...resto de datos de humedad
     { fecha: '18/02/2024', dato: '62%' },
   ],
 };
 
+// ----- FUNCIONES OPTIMIZADAS PARA MANEJO DE DATOS DE TEMPERATURA -----
+
+/**
+ * Formatea una fecha ISO de la base de datos a formato de visualización DD/MM/YYYY
+ * @param {String} dateTimeString - Fecha en formato ISO (ej: 2025-03-20T14:30:00)
+ * @returns {String} - Fecha formateada (ej: 20/03/2025)
+ */
+const formatDate = (dateTimeString) => {
+  // Crear un objeto Date a partir del string de fecha
+  const date = new Date(dateTimeString);
+  // Formatear la fecha como DD/MM/YYYY con padding de ceros (01/01/2025 en lugar de 1/1/2025)
+  return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+};
+
+/**
+ * Formatea la hora de un timestamp para mostrarla en la gráfica
+ * @param {String} dateTimeString - Fecha y hora en formato ISO
+ * @returns {String} - Hora formateada (ej: 14:30)
+ */
+const formatTimeForChart = (dateTimeString) => {
+  // Crear un objeto Date a partir del string de fecha y hora
+  const date = new Date(dateTimeString);
+  // Devolver solo la hora y minutos formateados como HH:MM
+  return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+};
+
 /**
  * Prepara los datos para la gráfica Chart.js
- * @param {Array} data - Array de objetos con fecha y dato
+ * @param {Array} data - Array de objetos con datos
  * @param {String} category - Categoría seleccionada
  * @returns {Object} Objeto formateado para Chart.js
  */
 const prepareChartData = (data, category) => {
-  // Usar datos de ejemplo fijos que corresponden a la imagen
-  // Simulamos los datos de temperatura vistos en la imagen original
-  const fixedTemperatureData = [
-    { hora: '6 AM', valor: 27.0 },
-    { hora: '9 AM', valor: 28.0 },
-    { hora: '12 PM', valor: 29.0 },
-    { hora: '3 PM', valor: 30.0 },
-    { hora: '6 PM', valor: 29.0 },
-    { hora: '9 PM', valor: 28.0 }
-  ];
-  
-  // Simulamos datos para otras categorías
-  const fixedHumidityData = [
-    { hora: '6 AM', valor: 60 },
-    { hora: '9 AM', valor: 63 },
-    { hora: '12 PM', valor: 67 },
-    { hora: '3 PM', valor: 70 },
-    { hora: '6 PM', valor: 65 },
-    { hora: '9 PM', valor: 62 }
-  ];
-  
-  const fixedIlluminationData = [
-    { hora: '6 AM', valor: 320 },
-    { hora: '9 AM', valor: 380 },
-    { hora: '12 PM', valor: 420 },
-    { hora: '3 PM', valor: 430 },
-    { hora: '6 PM', valor: 390 },
-    { hora: '9 PM', valor: 350 }
-  ];
-  
-  // Seleccionar el conjunto de datos según la categoría
-  let dataToUse;
-  if (category === 'Temperatura') {
-    dataToUse = fixedTemperatureData;
-  } else if (category === 'Humedad') {
-    dataToUse = fixedHumidityData;
-  } else {
-    dataToUse = fixedIlluminationData;
+  // CASO 1: Si es temperatura y tenemos datos reales de la API
+  if (category === 'Temperatura' && Array.isArray(data) && data.length > 0) {
+    // Tomar solo los últimos 6 registros (o menos si hay menos disponibles) y revertir para orden cronológico
+    const lastSixData = data.slice(0, Math.min(6, data.length)).reverse();
+    
+    // Construir los datos para la gráfica
+    return {
+      // Etiquetas del eje X: horas de las mediciones
+      labels: lastSixData.map(item => formatTimeForChart(item.Marca_tiempo)),
+      
+      // Conjunto de datos para dibujar
+      datasets: [
+        {
+          label: category,
+          // Convertimos las mediciones a números para la gráfica
+          data: lastSixData.map(item => parseFloat(item.Medicion)),
+          // Configuración visual de la línea
+          fill: false,
+          backgroundColor: 'rgba(255, 165, 0, 0.2)',
+          borderColor: '#FFA500',
+          borderWidth: 3,
+          tension: 0.3,
+          pointBackgroundColor: '#FFA500',
+          pointBorderColor: '#FFF',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }
+      ]
+    };
+  } 
+  // CASO 2: Para otras categorías (Iluminación y Humedad) usamos datos de ejemplo
+  else {
+    // Datos de ejemplo para gráficas de Humedad
+    const fixedHumidityData = [
+      { hora: '6 AM', valor: 60 },
+      { hora: '9 AM', valor: 63 },
+      { hora: '12 PM', valor: 67 },
+      { hora: '3 PM', valor: 70 },
+      { hora: '6 PM', valor: 65 },
+      { hora: '9 PM', valor: 62 }
+    ];
+    
+    // Datos de ejemplo para gráficas de Iluminación
+    const fixedIlluminationData = [
+      { hora: '6 AM', valor: 320 },
+      { hora: '9 AM', valor: 380 },
+      { hora: '12 PM', valor: 420 },
+      { hora: '3 PM', valor: 430 },
+      { hora: '6 PM', valor: 390 },
+      { hora: '9 PM', valor: 350 }
+    ];
+    
+    // Seleccionar el conjunto de datos según la categoría
+    let dataToUse = category === 'Humedad' ? fixedHumidityData : fixedIlluminationData;
+    
+    // Devolver los datos formateados para Chart.js
+    return {
+      labels: dataToUse.map(item => item.hora),
+      datasets: [
+        {
+          label: category,
+          data: dataToUse.map(item => item.valor),
+          fill: false,
+          backgroundColor: 'rgba(255, 165, 0, 0.2)',
+          borderColor: '#FFA500',
+          borderWidth: 3,
+          tension: 0.3,
+          pointBackgroundColor: '#FFA500',
+          pointBorderColor: '#FFF',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+        }
+      ]
+    };
   }
-  
-  // Preparar los datos para Chart.js
-  const chartData = {
-    labels: dataToUse.map(item => item.hora),
-    datasets: [
-      {
-        label: category,
-        data: dataToUse.map(item => item.valor),
-        fill: false,
-        backgroundColor: 'rgba(255, 165, 0, 0.2)',
-        borderColor: '#FFA500',
-        borderWidth: 3,
-        tension: 0.3,
-        pointBackgroundColor: '#FFA500',
-        pointBorderColor: '#FFF',
-        pointBorderWidth: 2,
-        pointRadius: 5,
-        pointHoverRadius: 7,
-      }
-    ]
-  };
-  
-  return chartData;
 };
 
-// Opciones de configuración para la gráfica (MODIFICADAS)
+// Configuración de opciones para la gráfica
 const getChartOptions = (category) => {
   // Determinar el rango según la categoría
   let min, max, stepSize;
   
   switch(category) {
     case 'Temperatura':
-      min = 27.0;
-      max = 30.0;
-      stepSize = 0.5;
+      // Valores ampliados para acomodar un rango más amplio de temperaturas
+      min = 20.0;
+      max = 35.0;
+      stepSize = 2.5;
       break;
     case 'Humedad':
       min = 55;
@@ -478,39 +458,40 @@ const getChartOptions = (category) => {
   };
 };
 
-
 /**
  * Componente principal para la visualización del historial de datos
  */
 function Historial() {
-
-  // Boton de busqueda (1)
+  // Estado para la búsqueda
   const [search, setSearch] = useState('');
 
-  // Estado para la categoría seleccionada (Temperatura, Humedad, Iluminación)
+  // Estado para la categoría seleccionada (por defecto 'Temperatura')
   const [selectedCategory, setSelectedCategory] = useState(categories[0]);
   
-  // Estado para los datos filtrados según la categoría seleccionada
-  const [filteredData, setFilteredData] = useState(initialData[selectedCategory]);
+  // Estado para almacenar los datos de temperatura cargados desde la API
+  const [temperatureData, setTemperatureData] = useState([]);
   
-  // Estado para los datos de la gráfica
+  // Estado para los datos filtrados según búsqueda y categoría
+  const [filteredData, setFilteredData] = useState([]);
+  
+  // Estado para los datos procesados para la gráfica
   const [chartData, setChartData] = useState(null);
   
   // Estado para el valor actual a mostrar prominentemente
   const [currentValue, setCurrentValue] = useState('');
   
-  // Estado para las opciones de la gráfica
+  // Estado para las opciones de configuración de la gráfica
   const [chartOptions, setChartOptions] = useState(getChartOptions(categories[0]));
   
-  // Unidades según la categoría seleccionada
-  const unidades = {
-    'Temperatura': '°C',
-    'Humedad': '%',
-    'Iluminacion': 'lux'
-  };
-
+  // Estado para controlar errores de carga
+  const [error, setError] = useState(null);
+  
+  // Estado para controlar indicador de carga
+  const [loading, setLoading] = useState(true);
+  
   const navigate = useNavigate();
 
+  // Verificar autenticación al cargar el componente
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -518,59 +499,180 @@ function Historial() {
     }
   }, [navigate]);
 
-  // Efecto para actualizar los datos cuando cambia la categoría
+  // ----- OPTIMIZACIÓN 1: EFECTO PARA CARGAR DATOS DE TEMPERATURA -----
   useEffect(() => {
-    // Actualiza los datos de la tabla
-    setFilteredData(initialData[selectedCategory]);
+    // Función asíncrona para obtener datos de la API
+    const fetchTemperatureData = async () => {
+      try {
+        // 1. Indicar que estamos cargando datos
+        setLoading(true);
+        
+        // 2. Realizar la petición GET a la API
+        const response = await axios.get('http://localhost:5000/api/temperatura');
+        
+        // 3. Verificar si hay datos en la respuesta
+        if (response.data && response.data.length > 0) {
+          // 4. Procesar los datos recibidos para adaptarlos al formato esperado
+          const formattedData = response.data.map(item => ({
+            fecha: formatDate(item.Marca_tiempo),  // Formateamos fecha para visualización
+            dato: `${item.Medicion}°C`,            // Agregamos unidad a la medición
+            zona: item.Zona,                       // Guardamos la zona de la temperatura
+            raw: item                              // Guardamos el objeto original para acceso a datos crudos
+          }));
+          
+          // 5. Actualizar el estado con los datos formateados
+          setTemperatureData(formattedData);
+        } else {
+          // 6. Si no hay datos, establecer un array vacío
+          setTemperatureData([]);
+        }
+        
+        // 7. Finalizar el estado de carga
+        setLoading(false);
+      } catch (err) {
+        // 8. Manejar errores de la petición
+        console.error("Error al cargar datos de temperatura:", err);
+        setError("Error al cargar datos de temperatura. Por favor, intente de nuevo más tarde.");
+        setLoading(false);
+      }
+    };
     
-    // Prepara los datos para la gráfica
-    setChartData(prepareChartData(initialData[selectedCategory], selectedCategory));
-    
-    // Actualiza las opciones de la gráfica según la categoría
-    setChartOptions(getChartOptions(selectedCategory));
-    
-    // Obtiene el valor más reciente para mostrar
-    const lastItem = initialData[selectedCategory][initialData[selectedCategory].length - 1];
-    setCurrentValue(lastItem.dato);
-  }, [selectedCategory]);
+    // Ejecutar la función de carga
+    fetchTemperatureData();
+  }, []); // Se ejecuta solo al montar el componente
 
-  // Manejador para el cambio de categoría
+  // ----- OPTIMIZACIÓN 2: EFECTO PARA ACTUALIZAR DATOS SEGÚN CATEGORÍA -----
+  useEffect(() => {
+    // CASO: TEMPERATURA - Usar datos reales de la API
+    if (selectedCategory === 'Temperatura') {
+      // 1. Actualizar los datos de la tabla
+      setFilteredData(temperatureData);
+      
+      // 2. Preparar datos para la gráfica
+      if (temperatureData.length > 0) {
+        // Extraer los datos originales desde los objetos 'raw'
+        const rawTemperatureData = temperatureData.map(item => item.raw);
+        
+        // Generar datos para la gráfica pasando los datos originales
+        setChartData(prepareChartData(rawTemperatureData, selectedCategory));
+        
+        // 3. Actualizar el valor actual (primer registro, el más reciente)
+        setCurrentValue(temperatureData[0].dato);
+      } else {
+        // Si no hay datos, mostrar "--" como valor actual
+        setCurrentValue("--");
+      }
+    } 
+    // CASO: OTRAS CATEGORÍAS - Usar datos de ejemplo
+    else {
+      // 1. Actualizar los datos de la tabla
+      setFilteredData(initialData[selectedCategory]);
+      
+      // 2. Preparar datos para la gráfica
+      setChartData(prepareChartData(null, selectedCategory));
+      
+      // 3. Actualizar el valor actual
+      const lastItem = initialData[selectedCategory][initialData[selectedCategory].length - 1];
+      setCurrentValue(lastItem.dato);
+    }
+    
+    // 4. Actualizar opciones de la gráfica según la categoría
+    setChartOptions(getChartOptions(selectedCategory));
+  }, [selectedCategory, temperatureData]); // Se ejecuta cuando cambia la categoría o los datos de temperatura
+
+  // Manejador para el cambio de categoría en el selector
   const handleCategoryChange = (event) => {
     setSelectedCategory(event.target.value);
   };
 
   // Función para manejar el filtro de búsqueda
   const handleSearchChange = (event) => {
-    const query = event.target.value;
+    const query = event.target.value.toLowerCase();
     setSearch(query);
-    const filtered = initialData[selectedCategory].filter(
-      (item) => item.fecha.includes(query) || item.dato.includes(query)
-    );
-    setFilteredData(filtered);
+    
+    // Filtrado diferente según la categoría seleccionada
+    if (selectedCategory === 'Temperatura') {
+      // Para temperatura, filtrar en datos reales de API
+      const filtered = temperatureData.filter(
+        (item) => 
+          item.fecha.toLowerCase().includes(query) || 
+          item.dato.toLowerCase().includes(query) ||
+          (item.zona && item.zona.toLowerCase().includes(query))
+      );
+      setFilteredData(filtered);
+    } else {
+      // Para otras categorías, filtrar en datos de ejemplo
+      const filtered = initialData[selectedCategory].filter(
+        (item) => item.fecha.toLowerCase().includes(query) || item.dato.toLowerCase().includes(query)
+      );
+      setFilteredData(filtered);
+    }
   };
 
   // Función para descargar la tabla como PDF
   const downloadPDF = () => {
     const doc = new jsPDF();
     let y = 20;
-    doc.text("Tabla de Datos", 20, y);
+    doc.text(`Tabla de Datos - ${selectedCategory}`, 20, y);
     y += 10;
 
     // Escribir los encabezados
     doc.text("Fecha", 20, y);
     doc.text("Dato", 80, y);
+    // Agregar columna de zona solo para temperatura
+    if (selectedCategory === 'Temperatura') {
+      doc.text("Zona", 140, y);
+    }
     y += 10;
 
     // Escribir los datos de la tabla
     filteredData.forEach(item => {
       doc.text(item.fecha, 20, y);
       doc.text(item.dato, 80, y);
+      if (selectedCategory === 'Temperatura' && item.zona) {
+        doc.text(item.zona, 140, y);
+      }
       y += 10;
+      
+      // Si llegamos al final de la página, crear una nueva
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
     });
 
-  // Guardar como PDF
-  doc.save('tabla_datos.pdf');
-};
+    // Guardar como PDF
+    doc.save(`tabla_${selectedCategory.toLowerCase()}.pdf`);
+  };
+
+  // Renderizar mensaje de carga o error si es necesario
+  if (loading) {
+    return (
+      <>
+        <Header showUserIcon={true} />
+        <Container>
+          <div style={{ textAlign: 'center', padding: '50px' }}>
+            Cargando datos...
+          </div>
+        </Container>
+        <Footer />
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Header showUserIcon={true} />
+        <Container>
+          <div style={{ textAlign: 'center', padding: '50px', color: 'red' }}>
+            {error}
+          </div>
+        </Container>
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <>
@@ -593,14 +695,17 @@ function Historial() {
           </CategorySelect>
   
           <RightButtonsContainer>
-
-            {/* Boton busqueda */}
-
+            {/* Botón búsqueda */}
             <input
               type="text"
               placeholder="Buscar..."
               value={search}
               onChange={handleSearchChange}
+              style={{
+                padding: '8px 10px',
+                borderRadius: '5px',
+                border: '1px solid #ddd'
+              }}
             />
 
             <DownloadButton onClick={downloadPDF}>
@@ -618,15 +723,26 @@ function Historial() {
                 <tr>
                   <Th>Fecha</Th>
                   <Th>Dato</Th>
+                  {/* Mostrar columna Zona solo para Temperatura */}
+                  {selectedCategory === 'Temperatura' && <Th>Zona</Th>}
                 </tr>
               </thead>
               <tbody>
-                {filteredData.map((item, index) => (
-                  <tr key={index}>
-                    <Td>{item.fecha}</Td>
-                    <Td>{item.dato}</Td>
+                {filteredData.length > 0 ? (
+                  filteredData.map((item, index) => (
+                    <tr key={index}>
+                      <Td>{item.fecha}</Td>
+                      <Td>{item.dato}</Td>
+                      {selectedCategory === 'Temperatura' && <Td>{item.zona || '-'}</Td>}
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <Td colSpan={selectedCategory === 'Temperatura' ? 3 : 2} style={{textAlign: 'center'}}>
+                      No hay datos disponibles
+                    </Td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </Table>
           </DataPanel>
