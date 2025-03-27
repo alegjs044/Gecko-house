@@ -4,7 +4,6 @@ import Footer from "../components/Footer";
 import { Line } from "react-chartjs-2";
 import styled from 'styled-components';
 import { useNavigate } from "react-router-dom";
-import Button from "../components/Button";
 import { ArrowDown } from "lucide-react";
 import { jsPDF } from "jspdf";
 // Importamos axios para hacer peticiones HTTP a nuestra API
@@ -117,6 +116,7 @@ const DownloadButton = styled.button`
   }
 `;
 
+// Actualizamos DataPanel para asegurar que el contenido se muestre pero con barras de desplazamiento
 const DataPanel = styled.div`
   background: rgba(123, 95, 61, 0.8);
   box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5), 
@@ -130,11 +130,47 @@ const DataPanel = styled.div`
   min-width: 300px;
   min-height: 450px;
   max-height: 500px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
   
   @media (max-width: 1200px) {
     width: 100%;
     max-width: 500px;
+  }
+`;
+
+// Componente mejorado para la tabla con barra de desplazamiento
+const TableWrapper = styled.div`
+  width: 100%;
+  height: 100%;
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border-radius: 5px;
+  
+  /* Estilos para la barra de desplazamiento vertical */
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #B4864D;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: #7B5F3D;
+  }
+  
+  /* Estilos para la barra de desplazamiento horizontal */
+  &::-webkit-scrollbar-corner {
+    background: #f1f1f1;
   }
 `;
 
@@ -153,6 +189,9 @@ const Th = styled.th`
   text-align: center;
   border: 1px solid #ddd;
   font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 `;
 
 const Td = styled.td`
@@ -162,16 +201,54 @@ const Td = styled.td`
   font-size: 14px;
 `;
 
+// Componente para la gráfica con barras de desplazamiento
+const ChartScrollWrapper = styled.div`
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  border-radius: 8px;
+  
+  /* Estilos para la barra de desplazamiento */
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #B4864D;
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: #7B5F3D;
+  }
+  
+  &::-webkit-scrollbar-corner {
+    background: #f1f1f1;
+  }
+`;
+
 const ChartContainer = styled.div`
   background-color: white;
   border-radius: 8px;
   padding: 20px;
   width: 100%;
-  height: 100%;
   min-height: 300px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+`;
+
+const ChartInnerContainer = styled.div`
+  min-width: 500px; /* Asegura que la gráfica tenga un ancho mínimo */
+  min-height: 300px; /* Asegura que la gráfica tenga una altura mínima */
+  height: 100%;
+  width: 100%;
+  flex-grow: 1;
 `;
 
 const CurrentValue = styled.div`
@@ -204,26 +281,8 @@ const Title = styled.h1`
   color: #333;
 `;
 
-// Categorías disponibles para seleccionar
-const categories = ['Temperatura', 'Iluminacion', 'Humedad'];
-
-// Datos de ejemplo para Iluminación y Humedad (solo mantenemos estos, ya que Temperatura vendrá de la API)
-const initialData = {
-  Iluminacion: [
-    { fecha: '01/02/2024', dato: '350 lux' },
-    { fecha: '02/02/2024', dato: '340 lux' },
-    // ...resto de datos de iluminación
-    { fecha: '18/02/2024', dato: '430 lux' },
-  ],
-  Humedad: [
-    { fecha: '01/02/2024', dato: '60%' },
-    { fecha: '02/02/2024', dato: '58%' },
-    // ...resto de datos de humedad
-    { fecha: '18/02/2024', dato: '62%' },
-  ],
-};
-
-// ----- FUNCIONES OPTIMIZADAS PARA MANEJO DE DATOS DE TEMPERATURA -----
+// Categorías disponibles para seleccionar (Iluminacion ahora se llama Iluminacion UV para mayor claridad)
+const categories = ['Temperatura', 'Iluminacion UV', 'Humedad'];
 
 /**
  * Formatea una fecha ISO de la base de datos a formato de visualización DD/MM/YYYY
@@ -256,10 +315,17 @@ const formatTimeForChart = (dateTimeString) => {
  * @returns {Object} Objeto formateado para Chart.js
  */
 const prepareChartData = (data, category) => {
-  // CASO 1: Si es temperatura y tenemos datos reales de la API
-  if (category === 'Temperatura' && Array.isArray(data) && data.length > 0) {
+  // Si tenemos datos reales de la API para cualquiera de las categorías
+  if (Array.isArray(data) && data.length > 0) {
     // Tomar solo los últimos 6 registros (o menos si hay menos disponibles) y revertir para orden cronológico
     const lastSixData = data.slice(0, Math.min(6, data.length)).reverse();
+    
+    // Extraer valores numéricos para calcular min/max
+    const numericValues = lastSixData.map(item => parseFloat(item.Medicion));
+    
+    // Calcular valor mínimo y máximo para el auto-ajuste
+    const minValue = Math.min(...numericValues);
+    const maxValue = Math.max(...numericValues);
     
     // Construir los datos para la gráfica
     return {
@@ -271,7 +337,7 @@ const prepareChartData = (data, category) => {
         {
           label: category,
           // Convertimos las mediciones a números para la gráfica
-          data: lastSixData.map(item => parseFloat(item.Medicion)),
+          data: numericValues,
           // Configuración visual de la línea
           fill: false,
           backgroundColor: 'rgba(255, 165, 0, 0.2)',
@@ -284,83 +350,94 @@ const prepareChartData = (data, category) => {
           pointRadius: 5,
           pointHoverRadius: 7,
         }
-      ]
+      ],
+      // Añadir propiedades para almacenar valores min/max
+      _minValue: minValue,
+      _maxValue: maxValue
     };
-  } 
-  // CASO 2: Para otras categorías (Iluminación y Humedad) usamos datos de ejemplo
-  else {
-    // Datos de ejemplo para gráficas de Humedad
-    const fixedHumidityData = [
-      { hora: '6 AM', valor: 60 },
-      { hora: '9 AM', valor: 63 },
-      { hora: '12 PM', valor: 67 },
-      { hora: '3 PM', valor: 70 },
-      { hora: '6 PM', valor: 65 },
-      { hora: '9 PM', valor: 62 }
-    ];
-    
-    // Datos de ejemplo para gráficas de Iluminación
-    const fixedIlluminationData = [
-      { hora: '6 AM', valor: 320 },
-      { hora: '9 AM', valor: 380 },
-      { hora: '12 PM', valor: 420 },
-      { hora: '3 PM', valor: 430 },
-      { hora: '6 PM', valor: 390 },
-      { hora: '9 PM', valor: 350 }
-    ];
-    
-    // Seleccionar el conjunto de datos según la categoría
-    let dataToUse = category === 'Humedad' ? fixedHumidityData : fixedIlluminationData;
-    
-    // Devolver los datos formateados para Chart.js
+  } else {
+    // Si no hay datos, devolver un objeto con datos vacíos pero estructura válida
     return {
-      labels: dataToUse.map(item => item.hora),
+      labels: [],
       datasets: [
         {
           label: category,
-          data: dataToUse.map(item => item.valor),
+          data: [],
           fill: false,
           backgroundColor: 'rgba(255, 165, 0, 0.2)',
           borderColor: '#FFA500',
           borderWidth: 3,
           tension: 0.3,
-          pointBackgroundColor: '#FFA500',
-          pointBorderColor: '#FFF',
-          pointBorderWidth: 2,
-          pointRadius: 5,
-          pointHoverRadius: 7,
         }
-      ]
+      ],
+      _minValue: 0,
+      _maxValue: 100
     };
   }
 };
 
-// Configuración de opciones para la gráfica
-const getChartOptions = (category) => {
-  // Determinar el rango según la categoría
-  let min, max, stepSize;
+/**
+ * Obtiene opciones de configuración para la gráfica adaptadas a los datos
+ * @param {String} category - Categoría seleccionada
+ * @param {Object} chartData - Datos de la gráfica que contienen _minValue y _maxValue
+ * @returns {Object} Opciones de configuración para Chart.js
+ */
+
+const getChartOptions = (category, chartData) => {
+  // Determinar el rango según la categoría y los datos
+  let minY, maxY, stepSizeY;
   
-  switch(category) {
-    case 'Temperatura':
-      // Valores ampliados para acomodar un rango más amplio de temperaturas
-      min = 20.0;
-      max = 35.0;
-      stepSize = 2.5;
-      break;
-    case 'Humedad':
-      min = 55;
-      max = 75;
-      stepSize = 5;
-      break;
-    case 'Iluminacion':
-      min = 300;
-      max = 450;
-      stepSize = 50;
-      break;
-    default:
-      min = null;
-      max = null;
-      stepSize = null;
+  // Para auto-ajuste del eje X (tiempo), necesitaremos detectar el rango de tiempo
+  let minTime = null, maxTime = null;
+  
+  // Si tenemos datos válidos con valores min/max
+  if (chartData && chartData._minValue !== undefined && chartData._maxValue !== undefined) {
+    // Calcular margen de 20% para que los puntos no queden pegados a los bordes
+    const rangeY = chartData._maxValue - chartData._minValue;
+    const paddingY = Math.max(rangeY * 0.2, 2); // Al menos 2 unidades de padding
+    
+    minY = Math.floor(chartData._minValue - paddingY);
+    maxY = Math.ceil(chartData._maxValue + paddingY);
+    
+    // Asegurar que min y max sean diferentes para evitar errores en la gráfica
+    if (minY === maxY) {
+      minY = minY - 5; // Aumentado para dar más espacio
+      maxY = maxY + 5; // Aumentado para dar más espacio
+    }
+    
+    // Calcular un tamaño de paso razonable
+    const stepsY = 4; // Ajustamos para tener menos líneas de cuadrícula
+    stepSizeY = Math.ceil((maxY - minY) / stepsY);
+    
+    // Auto-ajuste del eje X (tiempo)
+    if (chartData.labels && chartData.labels.length > 0) {
+      // Calculamos un margen adicional para el eje X
+      minTime = -0.5; // Margen izquierdo
+      maxTime = chartData.labels.length - 0.5; // Margen derecho
+    }
+  } else {
+    // Valores por defecto si no hay datos
+    switch(category) {
+      case 'Temperatura':
+        minY = 15.0;
+        maxY = 40.0;
+        stepSizeY = 5;
+        break;
+      case 'Humedad':
+        minY = 45;
+        maxY = 85;
+        stepSizeY = 10;
+        break;
+      case 'Iluminacion UV':
+        minY = 0;
+        maxY = 600;
+        stepSizeY = 100;
+        break;
+      default:
+        minY = 0;
+        maxY = 100;
+        stepSizeY = 20;
+    }
   }
 
   return {
@@ -384,7 +461,7 @@ const getChartOptions = (category) => {
               // Añadir unidad según la categoría
               if (category === 'Temperatura') label += '°C';
               else if (category === 'Humedad') label += '%';
-              else if (category === 'Iluminacion') label += ' lux';
+              else if (category === 'Iluminacion UV') label += ' lux';
             }
             return label;
           }
@@ -402,15 +479,26 @@ const getChartOptions = (category) => {
         ticks: {
           font: {
             size: 12
-          }
+          },
+          // Asegurar que todas las etiquetas sean visibles
+          autoSkip: false,
+          // Rotar etiquetas si hay muchas
+          maxRotation: 45,
+          minRotation: 0
         },
         title: {
           display: true,
           text: 'Tiempo',
           font: {
             size: 14
+          },
+          padding: {
+            top: 10
           }
-        }
+        },
+        // Añadir espacio en los extremos del eje X para mejorar la visualización
+        min: minTime,
+        max: maxTime,
       },
       y: {
         display: true,
@@ -419,12 +507,17 @@ const getChartOptions = (category) => {
           color: '#CCCCCC',
           drawBorder: true,
         },
-        min: min,
-        max: max,
+        min: minY,
+        max: maxY,
         ticks: {
-          stepSize: stepSize,
+          stepSize: stepSizeY,
           font: {
             size: 12
+          },
+          // Utilizar callback para formato personalizado
+          callback: function(value) {
+            // Evitar demasiados decimales
+            return Number.isInteger(value) ? value : value.toFixed(1);
           }
         },
         title: {
@@ -432,6 +525,9 @@ const getChartOptions = (category) => {
           text: category,
           font: {
             size: 14
+          },
+          padding: {
+            bottom: 10
           }
         }
       }
@@ -449,10 +545,10 @@ const getChartOptions = (category) => {
     },
     layout: {
       padding: {
-        top: 5,
-        right: 20,
-        bottom: 20,
-        left: 20
+        top: 20,
+        right: 30,
+        bottom: 30,
+        left: 30
       }
     }
   };
@@ -470,6 +566,12 @@ function Historial() {
   
   // Estado para almacenar los datos de temperatura cargados desde la API
   const [temperatureData, setTemperatureData] = useState([]);
+
+  // Estado para almacenar los datos de humedad cargados desde la API
+  const [humidityData, setHumidityData] = useState([]);
+
+   // Estado para almacenar los datos de iluminación UV cargados desde la API 
+   const [illuminationData, setIlluminationData] = useState([]);
   
   // Estado para los datos filtrados según búsqueda y categoría
   const [filteredData, setFilteredData] = useState([]);
@@ -541,44 +643,170 @@ function Historial() {
     fetchTemperatureData();
   }, []); // Se ejecuta solo al montar el componente
 
-  // ----- OPTIMIZACIÓN 2: EFECTO PARA ACTUALIZAR DATOS SEGÚN CATEGORÍA -----
+  // ----- EFECTO PARA CARGAR DATOS DE HUMEDAD -----
   useEffect(() => {
-    // CASO: TEMPERATURA - Usar datos reales de la API
-    if (selectedCategory === 'Temperatura') {
-      // 1. Actualizar los datos de la tabla
-      setFilteredData(temperatureData);
-      
-      // 2. Preparar datos para la gráfica
-      if (temperatureData.length > 0) {
-        // Extraer los datos originales desde los objetos 'raw'
-        const rawTemperatureData = temperatureData.map(item => item.raw);
+    // Función asíncrona para obtener datos de humedad
+    const fetchHumidityData = async () => {
+      try {
+        // Realizar la petición GET a la API
+        const response = await axios.get('http://localhost:5000/api/humedad');
         
-        // Generar datos para la gráfica pasando los datos originales
-        setChartData(prepareChartData(rawTemperatureData, selectedCategory));
+        // Verificar si hay datos en la respuesta
+        if (response.data && response.data.length > 0) {
+          // Procesar los datos recibidos para adaptarlos al formato esperado
+          const formattedData = response.data.map(item => ({
+            fecha: formatDate(item.Marca_tiempo),  // Formateamos fecha para visualización
+            dato: `${item.Medicion}%`,             // Agregamos unidad a la medición
+            raw: item                              // Guardamos el objeto original para acceso a datos crudos
+          }));
+          
+          // Actualizar el estado con los datos formateados
+          setHumidityData(formattedData);
+        } else {
+          // Si no hay datos, establecer un array vacío
+          setHumidityData([]);
+        }
         
-        // 3. Actualizar el valor actual (primer registro, el más reciente)
-        setCurrentValue(temperatureData[0].dato);
-      } else {
-        // Si no hay datos, mostrar "--" como valor actual
-        setCurrentValue("--");
+        // Finalizar el estado de carga
+        setLoading(false);
+      } catch (err) {
+        // Manejar errores de la petición
+        console.error("Error al cargar datos de humedad:", err);
+        setError("Error al cargar datos de humedad. Por favor, intente de nuevo más tarde.");
+        setLoading(false);
       }
-    } 
-    // CASO: OTRAS CATEGORÍAS - Usar datos de ejemplo
-    else {
-      // 1. Actualizar los datos de la tabla
-      setFilteredData(initialData[selectedCategory]);
-      
-      // 2. Preparar datos para la gráfica
-      setChartData(prepareChartData(null, selectedCategory));
-      
-      // 3. Actualizar el valor actual
-      const lastItem = initialData[selectedCategory][initialData[selectedCategory].length - 1];
-      setCurrentValue(lastItem.dato);
-    }
+    };
     
-    // 4. Actualizar opciones de la gráfica según la categoría
-    setChartOptions(getChartOptions(selectedCategory));
-  }, [selectedCategory, temperatureData]); // Se ejecuta cuando cambia la categoría o los datos de temperatura
+    // Ejecutar la función de carga
+    fetchHumidityData();
+  }, []); // Se ejecuta solo al montar el componente
+
+  // ----- EFECTO PARA CARGAR DATOS DE ILUMINACIÓN UV -----
+  useEffect(() => {
+    // Función asíncrona para obtener datos de iluminación
+    const fetchIlluminationData = async () => {
+      try {
+        // Realizar la petición GET a la API
+        const response = await axios.get('http://localhost:5000/api/iluminacion');
+        
+        // Verificar si hay datos en la respuesta
+        if (response.data && response.data.length > 0) {
+          // Procesar los datos recibidos para adaptarlos al formato esperado
+          const formattedData = response.data.map(item => ({
+            fecha: formatDate(item.Marca_tiempo),  // Formateamos fecha para visualización
+            dato: `${item.Medicion} lux`,          // Agregamos unidad a la medición
+            raw: item                              // Guardamos el objeto original para acceso a datos crudos
+          }));
+          
+          // Actualizar el estado con los datos formateados
+          setIlluminationData(formattedData);
+        } else {
+          // Si no hay datos, establecer un array vacío
+          setIlluminationData([]);
+        }
+
+        // Finalizar el estado de carga después de cargar todos los datos
+        setLoading(false);
+      } catch (err) {
+        // Manejar errores de la petición
+        console.error("Error al cargar datos de iluminación:", err);
+        setError("Error al cargar datos de iluminación. Por favor, intente de nuevo más tarde.");
+        setLoading(false);
+      }
+    };
+    
+    // Ejecutar la función de carga
+    fetchIlluminationData();
+  }, []); // Se ejecuta solo al montar el componente
+
+  
+  // ----- EFECTO PARA ACTUALIZAR DATOS SEGÚN CATEGORÍA -----
+  useEffect(() => {
+    // Seleccionar datos según la categoría
+    switch(selectedCategory) {
+      case 'Temperatura':
+        // Actualizar los datos de la tabla
+        setFilteredData(temperatureData);
+        
+        // Preparar datos para la gráfica
+        if (temperatureData.length > 0) {
+          // Extraer los datos originales desde los objetos 'raw'
+          const rawData = temperatureData.map(item => item.raw);
+          
+          // Generar datos para la gráfica
+          const preparedChartData = prepareChartData(rawData, selectedCategory);
+          setChartData(preparedChartData);
+          
+          // Actualizar opciones de la gráfica según los datos
+          setChartOptions(getChartOptions(selectedCategory, preparedChartData));
+          
+          // Actualizar el valor actual (primer registro, el más reciente)
+          setCurrentValue(temperatureData[0].dato);
+        } else {
+          // Si no hay datos, mostrar "--" como valor actual
+          setCurrentValue("--");
+          const emptyData = prepareChartData([], selectedCategory);
+          setChartData(emptyData);
+          setChartOptions(getChartOptions(selectedCategory, emptyData));
+        }
+        break;
+        
+      case 'Humedad':
+        // Actualizar los datos de la tabla
+        setFilteredData(humidityData);
+        
+        // Preparar datos para la gráfica
+        if (humidityData.length > 0) {
+          // Extraer los datos originales
+          const rawData = humidityData.map(item => item.raw);
+          
+          // Generar datos para la gráfica
+          const preparedChartData = prepareChartData(rawData, selectedCategory);
+          setChartData(preparedChartData);
+          
+          // Actualizar opciones de la gráfica según los datos
+          setChartOptions(getChartOptions(selectedCategory, preparedChartData));
+          
+          // Actualizar valor actual
+          setCurrentValue(humidityData[0].dato);
+        } else {
+          setCurrentValue("--");
+          const emptyData = prepareChartData([], selectedCategory);
+          setChartData(emptyData);
+          setChartOptions(getChartOptions(selectedCategory, emptyData));
+        }
+        break;
+        
+      case 'Iluminacion UV':
+        // Actualizar los datos de la tabla
+        setFilteredData(illuminationData);
+        
+        // Preparar datos para la gráfica
+        if (illuminationData.length > 0) {
+          // Extraer los datos originales
+          const rawData = illuminationData.map(item => item.raw);
+          
+          // Generar datos para la gráfica
+          const preparedChartData = prepareChartData(rawData, selectedCategory);
+          setChartData(preparedChartData);
+          
+          // Actualizar opciones de la gráfica según los datos
+          setChartOptions(getChartOptions(selectedCategory, preparedChartData));
+          
+          // Actualizar valor actual
+          setCurrentValue(illuminationData[0].dato);
+        } else {
+          setCurrentValue("--");
+          const emptyData = prepareChartData([], selectedCategory);
+          setChartData(emptyData);
+          setChartOptions(getChartOptions(selectedCategory, emptyData));
+        }
+        break;
+        
+      default:
+        break;
+    }
+  }, [selectedCategory, temperatureData, humidityData, illuminationData]); // Se ejecuta cuando cambia la categoría o los datos
 
   // Manejador para el cambio de categoría en el selector
   const handleCategoryChange = (event) => {
@@ -590,23 +818,31 @@ function Historial() {
     const query = event.target.value.toLowerCase();
     setSearch(query);
     
-    // Filtrado diferente según la categoría seleccionada
-    if (selectedCategory === 'Temperatura') {
-      // Para temperatura, filtrar en datos reales de API
-      const filtered = temperatureData.filter(
-        (item) => 
-          item.fecha.toLowerCase().includes(query) || 
-          item.dato.toLowerCase().includes(query) ||
-          (item.zona && item.zona.toLowerCase().includes(query))
-      );
-      setFilteredData(filtered);
-    } else {
-      // Para otras categorías, filtrar en datos de ejemplo
-      const filtered = initialData[selectedCategory].filter(
-        (item) => item.fecha.toLowerCase().includes(query) || item.dato.toLowerCase().includes(query)
-      );
-      setFilteredData(filtered);
+    // Obtener el conjunto de datos correspondiente a la categoría seleccionada
+    let dataToFilter;
+    switch(selectedCategory) {
+      case 'Temperatura':
+        dataToFilter = temperatureData;
+        break;
+      case 'Humedad':
+        dataToFilter = humidityData;
+        break;
+      case 'Iluminacion UV':
+        dataToFilter = illuminationData;
+        break;
+      default:
+        dataToFilter = [];
     }
+    
+    // Filtrar los datos según la consulta
+    const filtered = dataToFilter.filter(
+      (item) => 
+        item.fecha.toLowerCase().includes(query) || 
+        item.dato.toLowerCase().includes(query) ||
+        (item.zona && item.zona.toLowerCase().includes(query))
+    );
+    
+    setFilteredData(filtered);
   };
 
   // Función para descargar la tabla como PDF

@@ -1,321 +1,279 @@
 import React, { useRef, useEffect, useState } from "react";
-import styled from "styled-components";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import logo from "../assets/logo.png";
 import notificationIcon from "../assets/campana.png";
 import userIcon from "../assets/usuario.png";
-import {jwtDecode} from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
+import axios from "axios";
 
-
-const NavBar = styled.nav`
-  background-color: #B4864D;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  position: fixed;
-  width: 100%;
-  top: 0;
-  left: 0;
-  z-index: 100;
-  box-sizing: border-box;
-`;
-
-const LogoImg = styled.img`
-  width: 50px;
-  cursor: pointer;
-`;
-
-const NavContent = styled.div`
-  display: flex;
-  flex-grow: 1;
-  justify-content: center;
-  align-items: center;
-`;
-
-const Menu = styled.ul`
-  display: flex;
-  list-style: none;
-  gap: 20px;
-  margin: 0;
-  padding: 0;
-  
-  @media (max-width: 768px) {
-    gap: 15px;
-  }
-`;
-
-const MenuItem = styled.li`
-  font-weight: bold;
-  cursor: pointer;
-  color: white;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const RightSection = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  position: relative;
-`;
-
-const IconButton = styled.img`
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  
-  @media (max-width: 768px) {
-    width: 30px;
-    height: 30px;
-  }
-`;
-
-const LoginButton = styled.button`
-  padding: 10px 15px;
-  background-color: white;
-  color: black;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background 0.3s ease-in-out;
-  white-space: nowrap;
-  
-  &:hover {
-    background-color: #f5f5f5;
-  }
-`;
-
-const DropdownMenu = styled.div`
-  position: absolute;
-  top: 50px;
-  right: 0;
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  overflow: hidden;
-  z-index: 100;
-`;
-
-const DropdownMenuItem = styled.div`
-  padding: 10px 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  
-  &:hover {
-    background-color: #f0f0f0;
-  }
-`;
-
-
-// Nuevos componentes para las notificaciones
-const NotificationDropdown = styled(DropdownMenu)`
-  width: 300px;
-  max-height: 400px;
-  overflow-y: auto;
-  right: ${props => props.position || "0"};
-`;
-
-const NotificationItem = styled.div`
-  padding: 15px;
-  border-bottom: 1px solid #eaeaea;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  
-  &:hover {
-    background-color: #f5f5f5;
-  }
-  
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const NotificationTitle = styled.div`
-  font-weight: bold;
-  margin-bottom: 5px;
-  display: flex;
-  justify-content: space-between;
-`;
-
-const NotificationDescription = styled.div`
-  font-size: 0.9rem;
-  color: #555;
-`;
-
-const NotificationTime = styled.span`
-  font-size: 0.8rem;
-  color: #999;
-`;
-
-const UnreadIndicator = styled.div`
-  width: 8px;
-  height: 8px;
-  background-color: #E74C3C;
-  border-radius: 50%;
-  margin-right: 10px;
-  display: ${props => (props.read ? "none" : "block")};
-`;
-
-const NotificationBadge = styled.div`
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background-color: #E74C3C;
-  color: white;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  font-size: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-weight: bold;
-`;
-
-const NotificationHeader = styled.div`
-  padding: 15px;
-  font-weight: bold;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #eaeaea;
-  display: flex;
-  justify-content: space-between;
-`;
-
-const NotificationIconContainer = styled.div`
-  position: relative;
-`;
-
-const NoNotifications = styled.div`
-  padding: 20px;
-  text-align: center;
-  color: #777;
-`;
-
-// Estilo para el nombre de usuario
-const UserName = styled.span`
-  margin-right: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-`;
-
-
+import { 
+  NavBar, 
+  LogoImg, 
+  NavContent, 
+  Menu, 
+  MenuItem, 
+  RightSection, 
+  IconButton, 
+  LoginButton,
+  NotificationDropdown, 
+  NotificationItem, 
+  NotificationTitle,
+  NotificationDescription, 
+  NoNotifications, 
+  DropdownMenu, 
+  DropdownMenuItem, 
+  NotificationHeader, 
+  NotificationBadge, 
+  UnreadIndicator,
+  UserName,
+  NotificationIconContainer,
+} from "./NavBarStyles";
 
 const Header = ({ setHeaderHeight = () => {} }) => {
   const headerRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [notificationMenuVisible, setNotificationMenuVisible] = useState(false);
-  let username = '';
-  
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(new Date());
   const token = localStorage.getItem("token");
 
+  let username = '';
+  let userId = '';
+
   if (token) {
-    const decoded = jwtDecode(token); // Necesitas la librería jwt-decode
-    username = decoded.user;
-    console.log(username);
+    try {
+      const decoded = jwtDecode(token);
+      username = decoded.user;
+      userId = decoded.id;
+    } catch (error) {
+      console.error("Error al decodificar token:", error);
+      localStorage.removeItem("token"); // Eliminar token inválido
+    }
   }
-  
-  
-  // Estado para las notificaciones
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Alerta de temperatura',
-      description: 'La temperatura ha superado el umbral establecido',
-      dateTime: '2 días atrás',
-      read: false,
-    },
-    {
-      id: 2,
-      title: 'Humedad crítica',
-      description: 'La humedad está por debajo del nivel recomendado',
-      dateTime: '5 días atrás',
-      read: true,
-    },
-    {
-      id: 3,
-      title: 'Mantenimiento programado',
-      description: 'Se ha programado mantenimiento para el próximo lunes',
-      dateTime: '1 mes atrás',
-      read: false,
-    },
-  ]);
 
-  
+  // Configuración para el polling de notificaciones
+  const POLLING_INTERVAL = 30000; // 30 segundos para recargar notificaciones
 
+  // Efecto para actualizar la altura del header
   useEffect(() => {
     if (headerRef.current) {
       setHeaderHeight(headerRef.current.offsetHeight);
     }
     
-    const token = localStorage.getItem("token");
-    setIsAuthenticated(!!token);
-  }, [setHeaderHeight]);
+    if (token) {
+      setIsAuthenticated(true);
+    } else {
+      setIsAuthenticated(false);
+    }
+  }, [token, setHeaderHeight]);
+
+  // Efecto para cargar notificaciones iniciales y configurar la actualización periódica
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      fetchNotifications();
+      
+      // Configurar intervalo para actualizar notificaciones periódicamente
+      const notificationInterval = setInterval(() => {
+        fetchNotifications();
+      }, POLLING_INTERVAL);
+      
+      return () => clearInterval(notificationInterval);
+    }
+  }, [isAuthenticated, userId, location.pathname]); // Agregado location.pathname para recargar en cambios de ruta
+
+  // Efecto para actualizar el tiempo actual
+  useEffect(() => {
+    const timerInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timerInterval);
+  }, []);
+
+  // Función para obtener notificaciones desde el servidor
+  const fetchNotifications = async () => {
+    if (!userId) return;
+    
+    try {
+      const response = await axios.get(`http://localhost:5000/api/getNotificationsByUserId/${userId}`);
+      const data = response.data;
+      if (data.notifications) {
+        const formattedNotifications = data.notifications.map(notif => ({
+          id: notif.id_notificacion,
+          tipo: notif.tipo,
+          descripcion: notif.descripcion,
+          time_alert: notif.time_alert,
+          is_read: notif.is_read === 1 || notif.is_read === true,
+        }));
+        
+        // Guardar notificaciones en el estado local
+        setNotifications(formattedNotifications);
+        
+        // Calcular el número de notificaciones no leídas
+        const unreadNotifications = formattedNotifications.filter(notif => !notif.is_read);
+        setUnreadCount(unreadNotifications.length);
+        
+        // También guardar en localStorage para persistencia entre rutas
+        localStorage.setItem('notifications', JSON.stringify(formattedNotifications));
+        localStorage.setItem('unreadCount', unreadNotifications.length.toString());
+      }
+    } catch (error) {
+      console.error("Error al obtener notificaciones:", error);
+      
+      // En caso de error, intentar cargar desde localStorage
+      const cachedNotifications = localStorage.getItem('notifications');
+      if (cachedNotifications) {
+        setNotifications(JSON.parse(cachedNotifications));
+        setUnreadCount(parseInt(localStorage.getItem('unreadCount') || '0'));
+      }
+    }
+  };
+
+  // Al iniciar sesión, cargar desde localStorage mientras se obtienen los datos del servidor
+  useEffect(() => {
+    if (isAuthenticated) {
+      const cachedNotifications = localStorage.getItem('notifications');
+      if (cachedNotifications) {
+        setNotifications(JSON.parse(cachedNotifications));
+        setUnreadCount(parseInt(localStorage.getItem('unreadCount') || '0'));
+      }
+    }
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("notifications");
+    localStorage.removeItem("unreadCount");
     setIsAuthenticated(false);
+    setNotifications([]);
+    setUnreadCount(0);
     navigate("/login");
   };
 
-  // Función para manejar el clic en una notificación
-  const handleNotificationClick = (notificationId) => {
-    // Marcar la notificación como leída
-    setNotifications(
-      notifications.map(notif =>
-        notif.id === notificationId ? { ...notif, read: true } : notif
-      )
-    );
-    
-    // Aquí podrías navegar a una página de detalles de la notificación
-    // Por ejemplo: navigate(`/notificaciones/${notificationId}`);
-    
-    // Para este ejemplo, simplemente cerramos el menú
-    setNotificationMenuVisible(false);
+  const handleNotificationClick = async (notificationId) => {
+    try {
+      // Actualizar en la base de datos
+      await axios.post(`http://localhost:5000/api/markNotificationAsRead/${notificationId}/${userId}`);
+      
+      // Actualizar el estado local
+      const updatedNotifications = notifications.map(notif =>
+        notif.id === notificationId ? { ...notif, is_read: true } : notif
+      );
+      
+      setNotifications(updatedNotifications);
+      
+      // Recalcular el contador de no leídas
+      const unreadNotifications = updatedNotifications.filter(notif => !notif.is_read);
+      setUnreadCount(unreadNotifications.length);
+      
+      // Actualizar el localStorage
+      localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+      localStorage.setItem('unreadCount', unreadNotifications.length.toString());
+      
+      setNotificationMenuVisible(false);
+    } catch (error) {
+      console.error("Error al marcar notificación como leída:", error);
+    }
   };
 
-  // Función para marcar todas las notificaciones como leídas
-  const markAllAsRead = () => {
-    setNotifications(
-      notifications.map(notif => ({ ...notif, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      // Actualizar en la base de datos
+      await axios.post(`http://localhost:5000/api/markAllNotificationsAsRead/${userId}`);
+      
+      // Actualizar estado local
+      const updatedNotifications = notifications.map(notif => ({ ...notif, is_read: true }));
+      setNotifications(updatedNotifications);
+      setUnreadCount(0);
+      
+      // Actualizar localStorage
+      localStorage.setItem('notifications', JSON.stringify(updatedNotifications));
+      localStorage.setItem('unreadCount', '0');
+    } catch (error) {
+      console.error("Error al marcar todas las notificaciones como leídas:", error);
+    }
   };
 
-  // Contar notificaciones no leídas
-  const unreadCount = notifications.filter(notif => !notif.read).length;
+  const handleNotificationIconClick = () => {
+    setNotificationMenuVisible(prev => !prev);
+    setMenuVisible(false);
+  };
 
-  // Cerrar menús al hacer clic fuera de ellos
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (notificationMenuVisible || menuVisible) {
-        // Si el clic no fue dentro de un menú desplegable o en los iconos, cerrar los menús
-        if (!event.target.closest('.dropdown-menu') && 
-            !event.target.matches('[alt="Notificaciones"]') && 
-            !event.target.matches('[alt="Usuario"]')) {
-          setNotificationMenuVisible(false);
-          setMenuVisible(false);
-        }
+  const handleClickOutside = (event) => {
+    if (notificationMenuVisible || menuVisible) {
+      if (!event.target.closest('.dropdown-menu') && 
+          !event.target.matches('[alt="Notificaciones"]') && 
+          !event.target.matches('[alt="Usuario"]')) {
+        setNotificationMenuVisible(false);
+        setMenuVisible(false);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     document.addEventListener('click', handleClickOutside);
     return () => {
       document.removeEventListener('click', handleClickOutside);
     };
   }, [notificationMenuVisible, menuVisible]);
 
+  const getTimeElapsedDynamic = (timeStamp) => {
+    if (!timeStamp) return "FECHA DESCONOCIDA";
+    
+    try {
+      const referenceTime = new Date();
+      let alertDate;
+
+      if (typeof timeStamp === 'string') {
+        const [datePart, timePart] = timeStamp.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        alertDate = new Date(year, month - 1, day, hours, minutes, seconds);
+      } else if (timeStamp instanceof Date) {
+        alertDate = timeStamp;
+      } else {
+        alertDate = new Date(Number(timeStamp));
+      }
+
+      if (isNaN(alertDate.getTime())) {
+        console.error("No se pudo convertir a fecha válida:", timeStamp);
+        return "FECHA INVÁLIDA";
+      }
+
+      const diffMs = Math.max(0, referenceTime - alertDate);
+      const diffSecs = Math.floor(diffMs / 1000);
+      const diffMins = Math.floor(diffSecs / 60);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      const diffWeeks = Math.floor(diffDays / 7);
+      const diffMonths = Math.floor(diffDays / 30);
+
+      if (diffSecs < 60) {
+        return diffSecs <= 1 ? "HACE UN SEGUNDO" : `HACE ${diffSecs} SEGUNDOS`;
+      } else if (diffMins < 60) {
+        return diffMins === 1 ? "HACE UN MINUTO" : `HACE ${diffMins} MINUTOS`;
+      } else if (diffHours < 24) {
+        return diffHours === 1 ? "HACE UNA HORA" : `HACE ${diffHours} HORAS`;
+      } else if (diffDays < 7) {
+        return diffDays === 1 ? "HACE UN DÍA" : `HACE ${diffDays} DÍAS`;
+      } else if (diffWeeks < 4) {
+        return diffWeeks === 1 ? "HACE UNA SEMANA" : `HACE ${diffWeeks} SEMANAS`;
+      } else if (diffMonths < 12) {
+        return diffMonths === 1 ? "HACE UN MES" : `HACE ${diffMonths} MESES`;
+      } else {
+        const diffYears = Math.floor(diffMonths / 12);
+        return diffYears === 1 ? "HACE UN AÑO" : `HACE ${diffYears} AÑOS`;
+      }
+    } catch (error) {
+      console.error("Error al calcular tiempo transcurrido:", error);
+      return "FECHA DESCONOCIDA";
+    }
+  };
+
   return (
     <NavBar ref={headerRef}>
       <LogoImg src={logo} alt="Logo" onClick={() => navigate("/")} />
-      
       <NavContent>
         <Menu>
           <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
@@ -328,65 +286,44 @@ const Header = ({ setHeaderHeight = () => {} }) => {
         {isAuthenticated ? (
           <>
             <NotificationIconContainer>
-            <UserName>{username}</UserName>
-              <IconButton 
-                src={notificationIcon} 
-                alt="Notificaciones" 
-                onClick={() => {
-                  setNotificationMenuVisible(!notificationMenuVisible);
-                  setMenuVisible(false);
-                }}
-              />
+              <UserName>{username}</UserName>
+              <IconButton src={notificationIcon} alt="Notificaciones" onClick={handleNotificationIconClick} />
               {unreadCount > 0 && <NotificationBadge>{unreadCount}</NotificationBadge>}
-              
               {notificationMenuVisible && (
-                <NotificationDropdown className="dropdown-menu" position="60px">
+                <NotificationDropdown className="dropdown-menu">
                   <NotificationHeader>
                     Notificaciones
                     {unreadCount > 0 && (
-                      <span 
-                        style={{ fontSize: '0.8rem', color: '#5a5a5a', cursor: 'pointer' }}
-                        onClick={markAllAsRead}
-                      >
+                      <span onClick={markAllAsRead} style={{ fontSize: '0.8rem', color: '#5a5a5a', cursor: 'pointer' }}>
                         Marcar todas como leídas
                       </span>
                     )}
                   </NotificationHeader>
-                  
-                  {notifications.length > 0 ? (
-                    notifications.map(notification => (
-                      <NotificationItem 
-                        key={notification.id}
-                        onClick={() => handleNotificationClick(notification.id)}
-                      >
-                        <NotificationTitle>
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <UnreadIndicator read={notification.read} />
-                            {notification.title}
-                          </div>
-                          <NotificationTime>{notification.timestampReceived}</NotificationTime>
-                        </NotificationTitle>
-                        <NotificationDescription>
-                          {notification.description}
-                        </NotificationDescription>
-                      </NotificationItem>
-                    ))
-                  ) : (
+                  {notifications.length > 0 ? notifications.map(notification => (
+                    <NotificationItem 
+                      key={notification.id} 
+                      onClick={() => handleNotificationClick(notification.id)}
+                      style={{ 
+                        backgroundColor: notification.is_read ? 'transparent' : 'rgba(235, 245, 255, 0.5)' 
+                      }}
+                    >
+                      <NotificationTitle>
+                        <UnreadIndicator read={notification.is_read} />
+                        {notification.tipo}
+                      </NotificationTitle>
+                      <NotificationDescription>{notification.descripcion}</NotificationDescription>
+                      <small style={{ color: '#777', fontSize: '0.75rem' }}>
+                        {getTimeElapsedDynamic(notification.time_alert)}
+                      </small>
+                    </NotificationItem>
+                  )) : (
                     <NoNotifications>No tienes notificaciones</NoNotifications>
                   )}
                 </NotificationDropdown>
               )}
             </NotificationIconContainer>
-            
-            <IconButton 
-              src={userIcon} 
-              alt="Usuario" 
-              onClick={() => {
-                setMenuVisible(!menuVisible);
-                setNotificationMenuVisible(false);
-              }}
-            />
-            
+
+            <IconButton src={userIcon} alt="Usuario" onClick={() => setMenuVisible(prev => !prev)} />
             {menuVisible && (
               <DropdownMenu className="dropdown-menu">
                 <DropdownMenuItem onClick={() => navigate("/editar-datos")}>Editar datos</DropdownMenuItem>

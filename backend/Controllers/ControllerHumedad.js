@@ -15,7 +15,7 @@ exports.addHumedad = (req, res) => {
     });
 };
 
-exports.getHumedad = (res) => {
+exports.getHumedad = (req, res) => {
     db.query('SELECT Medicion, Marca_tiempo FROM humedad', (err, results) => {
         if (err) {
             return res.status(500).json({ error: err.message });
