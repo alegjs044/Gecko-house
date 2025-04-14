@@ -30,3 +30,7 @@ yarn-error.log*
 /frontend/.cache/
 /frontend/node_modules/.cache/
 .env
+# Ignorar archivos enormes que no deben subirse
+/frontend/node_modules/
+/frontend/.cache/
+/frontend/node_modules/.cache/
