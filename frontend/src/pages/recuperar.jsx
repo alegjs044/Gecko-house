@@ -1,62 +1,45 @@
 import React, { useState } from "react";
-import styled from "styled-components";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import InputField from "../components/InputField";
+import Button from "../components/Button";
+import planta from "../assets/planta.png";
+import gecko from "../assets/reptil-gecko.png";
 import axios from "axios";
 
-const Container = styled.div`
-  border-radius: 20px;
-  width: 80%;
-  max-width: 500px;
-  margin: auto;
-  padding: 2rem;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  text-align: center;
-  background: white;
-`;
-
-const Title = styled.h2`
-  color: black;
-  margin-bottom: 15px;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-`;
-
-const Button = styled.button`
-  background-color: #007bff;
-  color: white;
-  padding: 10px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  width: 100%;
-  font-size: 16px;
-  margin-top: 10px;
-  &:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
-`;
+import {
+  Container,
+  Title,
+  Message,
+  Box,
+  StyledGecko,
+  StyledPlanta
+} from "../styles/recuperarStyles";
 
 const RecoverPassword = () => {
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMsg("");
+
     try {
-      const response = await axios.post("http://localhost:3000/api/recover-password", { email });
-      alert(response.data.msg); // Mensaje desde el backend
+      const response = await axios.post("http://localhost:5000/api/recover-password", { email });
+      setMsg(response.data.msg);
+      setSuccess(true);
       setEmail("");
     } catch (error) {
-      alert("Hubo un error al enviar el correo. Inténtalo de nuevo.");
+      setSuccess(false);
+      if (error.response?.data?.msg) {
+        setMsg(error.response.data.msg);
+      } else {
+        setMsg("Hubo un error al enviar el correo. Inténtalo de nuevo.");
+      }
     } finally {
       setLoading(false);
     }
@@ -64,23 +47,31 @@ const RecoverPassword = () => {
 
   return (
     <>
-      <Header />
-      <Container>
-        <Title>Recuperación de Contraseña</Title>
-        <p>Ingresa tu correo electrónico para recibir instrucciones</p>
-        <form onSubmit={handleSubmit}>
-          <Input
-            type="email"
-            placeholder="Correo electrónico"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <Button type="submit" disabled={loading}>
-            {loading ? "Enviando..." : "Enviar"}
-          </Button>
-        </form>
+      <Header setHeaderHeight={setHeaderHeight} hideLoginButton={true} />
+
+      <Container headerHeight={headerHeight}>
+        <StyledGecko src={gecko} alt="Gecko" />
+        <StyledPlanta src={planta} alt="Planta" />
+
+        <Box>
+          <Title>Recuperación de Contraseña</Title>
+          <p>Ingresa tu correo electrónico para recibir instrucciones</p>
+
+          <form onSubmit={handleSubmit}>
+            <InputField
+              type="email"
+              placeholder="Correo electrónico"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <Button text={loading ? "Enviando..." : "Enviar"} type="submit" disabled={loading} />
+          </form>
+
+          {msg && <Message success={success}>{msg}</Message>}
+        </Box>
       </Container>
+
       <Footer />
     </>
   );

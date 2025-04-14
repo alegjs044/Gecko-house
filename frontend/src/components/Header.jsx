@@ -1,134 +1,167 @@
 import React, { useRef, useEffect, useState } from "react";
-import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
-import notificationIcon from "../assets/campana.png"; 
+import notificationIcon from "../assets/campana.png";
 import userIcon from "../assets/usuario.png";
+import { jwtDecode } from "jwt-decode";
+import { io } from "socket.io-client";
+import { showNotificacion } from "../Utils/showNotificacion";
+import { LIMITES } from "../constants/Limites";
 
-const NavBar = styled.nav`
-  background-color: #B4864D;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  position: fixed;
-  width: 100%;
-  top: 0;
-  left: 0;
-  z-index: 100;
-  box-sizing: border-box;
-`;
 
-const LogoImg = styled.img`
-  width: 50px;
-  cursor: pointer;
-`;
+import {
+  saveLocalNotification,
+  getLocalNotifications,
+  clearLocalNotifications,
+} from "../Utils/ServicioNotificacion";
 
-const NavContent = styled.div`
-  display: flex;
-  flex-grow: 1;
-  justify-content: center;
-  align-items: center;
-`;
+import {
+  NavBar,
+  LogoImg,
+  NavContent,
+  Menu,
+  MenuItem,
+  RightSection,
+  IconButton,
+  LoginButton,
+  NotificationDropdown,
+  NotificationItem,
+  NotificationTitle,
+  NotificationDescription,
+  NoNotifications,
+  DropdownMenu,
+  DropdownMenuItem,
+  NotificationHeader,
+  NotificationBadge,
+  UnreadIndicator,
+  UserName,
+  NotificationIconContainer,
+} from "../styles/NavBarStyles";
 
-const Menu = styled.ul`
-  display: flex;
-  list-style: none;
-  gap: 20px;
-  margin: 0;
-  padding: 0;
-
-  @media (max-width: 768px) {
-    gap: 15px;
-  }
-`;
-
-const MenuItem = styled.li`
-  font-weight: bold;
-  cursor: pointer;
-  color: white;
-
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const RightSection = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  position: relative;
-`;
-
-const IconButton = styled.img`
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-
-  @media (max-width: 768px) {
-    width: 30px;
-    height: 30px;
-  }
-`;
-
-const LoginButton = styled.button`
-  padding: 10px 15px;
-  background-color: white;
-  color: black;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background 0.3s ease-in-out;
-  white-space: nowrap;
-
-  &:hover {
-    background-color: #f5f5f5;
-  }
-`;
-
-const DropdownMenu = styled.div`
-  position: absolute;
-  top: 50px;
-  right: 0;
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  overflow: hidden;
-  z-index: 100;
-`;
-
-const DropdownMenuItem = styled.div`
-  padding: 10px 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
-  &:hover {
-    background-color: #f0f0f0;
-  }
-`;
+const socket = io("http://localhost:5000");
 
 const Header = ({ setHeaderHeight = () => {} }) => {
   const headerRef = useRef(null);
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [notificationMenuVisible, setNotificationMenuVisible] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+
+  const token = localStorage.getItem("token");
+  let username = "";
+
+  if (token) {
+    try {
+      const decoded = jwtDecode(token);
+      username = decoded.user;
+    } catch (error) {
+      console.error("Error al decodificar token:", error);
+      localStorage.removeItem("token");
+    }
+  }
 
   useEffect(() => {
     if (headerRef.current) {
       setHeaderHeight(headerRef.current.offsetHeight);
     }
-
-    const token = localStorage.getItem("token");
     setIsAuthenticated(!!token);
-  }, [setHeaderHeight]);
+  }, [token, setHeaderHeight]);
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission !== "granted") {
+      Notification.requestPermission().then((permiso) => {
+        if (permiso === "granted") {
+          console.log(" Permiso de notificaciones concedido.");
+        }
+      });
+    }
+  }, []);
+  
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const local = getLocalNotifications();
+      setNotifications(local);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    socket.on("sensor-data", (data) => {
+      const limites = {
+        "terrario/zonafria": LIMITES.temperaturaFria,
+        "terrario/zonacaliente": LIMITES.temperaturaCaliente,
+      };
+      
+  
+      const rango = limites[data.topic];
+      if (rango && (data.valor < rango.bajo || data.valor > rango.alto)) {
+        const tipo = data.topic.includes("fria") ? "Temperatura Zona Fría" : "Temperatura Zona Caliente";
+        const descripcion = data.valor > rango.alto
+          ? `⚠️ ${tipo} superó ${rango.alto}°C. Actual: ${data.valor}°C`
+          : `⚠️ ${tipo} bajó de ${rango.bajo}°C. Actual: ${data.valor}°C`;
+  
+        const alerta = {
+          tipo,
+          descripcion,
+          timestamp: new Date().toISOString(),
+        };
+  
+        saveLocalNotification(alerta);
+        setNotifications(prev => [alerta, ...prev]);
+  
+        
+        showNotificacion(tipo, descripcion);
+      }
+    });
+  
+    return () => socket.off("sensor-data");
+  }, []);
+  
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    localStorage.clear();
     setIsAuthenticated(false);
     navigate("/login");
+  };
+
+  const handleNotificationClick = (idx) => {
+    const updated = [...notifications];
+    updated.splice(idx, 1);
+    setNotifications(updated);
+    localStorage.setItem("visual_notifications", JSON.stringify(updated));
+    setNotificationMenuVisible(false);
+  };
+
+  const markAllAsRead = () => {
+    clearLocalNotifications();
+    setNotifications([]);
+  };
+
+  const handleClickOutside = (event) => {
+    if (
+      !event.target.closest(".dropdown-menu") &&
+      !event.target.closest('[alt="Notificaciones"]') &&
+      !event.target.closest('[alt="Usuario"]')
+    ) {
+      setNotificationMenuVisible(false);
+      setMenuVisible(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [notificationMenuVisible, menuVisible]);
+
+  const getTimeElapsed = (timestamp) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diff = Math.floor((now - then) / 1000);
+    if (diff < 60) return `${diff}s`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+    return `${Math.floor(diff / 86400)}d`;
   };
 
   return (
@@ -138,25 +171,76 @@ const Header = ({ setHeaderHeight = () => {} }) => {
       <NavContent>
         <Menu>
           <MenuItem onClick={() => navigate("/")}>Inicio</MenuItem>
-          <MenuItem onClick={() => navigate("/dashboard")}>Centro de monitoreo y control</MenuItem>
-          <MenuItem onClick={() => navigate("/historial")}>Historial de datos</MenuItem>
+          <MenuItem onClick={() => navigate("/dashboard")}>Monitoreo y Control</MenuItem>
+          <MenuItem onClick={() => navigate("/historial")}>Historial</MenuItem>
         </Menu>
       </NavContent>
 
       <RightSection>
         {isAuthenticated ? (
           <>
-            <IconButton src={notificationIcon} alt="Notificaciones" />
-            <IconButton src={userIcon} alt="Usuario" onClick={() => setMenuVisible(!menuVisible)} />
+            <NotificationIconContainer>
+              <UserName>{username}</UserName>
+              <IconButton
+                src={notificationIcon}
+                alt="Notificaciones"
+                onClick={() => setNotificationMenuVisible(!notificationMenuVisible)}
+              />
+              {notifications.length > 0 && (
+                <NotificationBadge>{notifications.length}</NotificationBadge>
+              )}
+              {notificationMenuVisible && (
+                <NotificationDropdown className="dropdown-menu">
+                  <NotificationHeader>
+                    Notificaciones
+                    {notifications.length > 0 && (
+                      <span
+                        onClick={markAllAsRead}
+                        style={{ cursor: "pointer", fontSize: "0.8rem" }}
+                      >
+                        Marcar todas
+                      </span>
+                    )}
+                  </NotificationHeader>
+                  {notifications.length > 0 ? (
+                    notifications.map((notif, idx) => (
+                      <NotificationItem
+                        key={idx}
+                        onClick={() => handleNotificationClick(idx)}
+                        style={{ backgroundColor: "rgba(235,245,255,0.5)" }}
+                      >
+                        <NotificationTitle>
+                          <UnreadIndicator read={false} />
+                          {notif.tipo}
+                        </NotificationTitle>
+                        <NotificationDescription>{notif.descripcion}</NotificationDescription>
+                        <small style={{ color: "#777" }}>{getTimeElapsed(notif.timestamp)}</small>
+                      </NotificationItem>
+                    ))
+                  ) : (
+                    <NoNotifications>No tienes notificaciones</NoNotifications>
+                  )}
+                </NotificationDropdown>
+              )}
+            </NotificationIconContainer>
+
+            <IconButton
+              src={userIcon}
+              alt="Usuario"
+              onClick={() => setMenuVisible(!menuVisible)}
+              style={{ marginRight: "20px" }}
+            />
             {menuVisible && (
-              <DropdownMenu>
+              <DropdownMenu className="dropdown-menu">
                 <DropdownMenuItem onClick={() => navigate("/editar-datos")}>Editar datos</DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout}>Cerrar sesión</DropdownMenuItem>
               </DropdownMenu>
             )}
           </>
         ) : (
-          <LoginButton onClick={() => navigate("/login")}>Iniciar sesión</LoginButton>
+          <LoginButton onClick={() => navigate("/login")} style={{ marginRight: "20px" }}>
+            Iniciar sesión
+          </LoginButton>
         )}
       </RightSection>
     </NavBar>
