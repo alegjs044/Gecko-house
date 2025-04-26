@@ -19,29 +19,42 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// Rutas Express existentes
+// Rutas
 app.get("/", (req, res) => res.send("Servidor funcionando correctamente!"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/email", require("./routes/email"));
 app.use("/api", require("./routes/recuperar"));
 
-require("./autoRecorder");
+require("./data");
 
 // WebSocket
 io.on("connection", (socket) => {
   console.log("🟢 Cliente conectado a WebSocket");
 
-  socket.on("modo", (modo) => mqttClient.publish("terrario/modo", modo));
-  socket.on("placa-termica", (temp) => mqttClient.publish("terrario/placa-termica", temp.toString()));
-  socket.on("humidificador", (estado) => mqttClient.publish("terrario/humidificador", estado ? "on" : "off"));
-  socket.on("muda-piel", (modo) => mqttClient.publish("terrario/muda-piel", modo));
+  socket.on("modo", (modo) => {
+    mqttClient.publish("terrario/modo/User1", modo);
+  });
+
+  socket.on("placa-termica", (porcentaje) => {
+    const value = Math.max(0, Math.min(100, parseInt(porcentaje)));
+    mqttClient.publish("terrario/placa-termica/User1", value.toString());
+  });
+
+  socket.on("humidificador", (estado) => {
+    mqttClient.publish("terrario/humidificador/User1", estado ? "on" : "off");
+  });
+
+  socket.on("iluminación", (estado) => {
+    mqttClient.publish("terrario/iluminacion/User1", estado ? "on" : "off");
+  });
+
+  socket.on("muda-piel", (modo) => {
+    mqttClient.publish("terrario/muda-piel/User1", modo);
+  });
 });
 
-// Inicializar conexión MQTT con lógica modularizada
+// MQTT Listener
 initMQTT(io);
-
-
-
 
 // Servidor HTTP
 const PORT = process.env.PORT || 5000;

@@ -6,37 +6,42 @@ export const CycleImage = styled.img`
 `;
 
 export const Container = styled.div`
-  padding: 50px 30px;
+  padding: 80px 30px 50px;
   margin: auto;
   max-width: 1400px;
   background: #f8f4e1;
   border-radius: 20px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0px 4px 10px rgba(184, 133, 133, 0.2);
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;
-  gap: 20px;
-  min-height: 85vh;
-  align-items: stretch;
+  gap: 25px; 
+  align-items: flex-start;
+  min-height: calc(100vh - 100px);
+  box-sizing: border-box;
+  overflow-x: hidden;
+
+  @media (max-width: 1024px) {
+    grid-template-columns: 1fr;
+  }
 `;
+
 
 export const CardTitle = styled.h3`
   background: #093609;
+  color: white;
   padding: 12px;
   border-radius: 10px;
   font-size: 18px;
-  position: absolute;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 70%;
   text-align: center;
-  color: white;
-  z-index: 3;
+  margin-bottom: 20px;
+  margin: -80px 70px 60px;
+  width: 60%;
 `;
 
 export const ButtonGroup = styled.div`
   display: flex;
-  justify-content: space-between;
+  justify-content: center; 
+  gap: 15px; 
   padding-bottom: 10px;
   border-bottom: 2px solid rgba(0, 0, 0, 0.2);
   z-index: 3;
@@ -44,18 +49,19 @@ export const ButtonGroup = styled.div`
 `;
 
 export const ModeButton = styled.button`
-  flex: 1;
-  margin: 5px;
+  flex: 0 0 48%;
   background: ${({ active }) => (active ? "#093609" : "#E0E2E6")};
   color: ${({ active }) => (active ? "white" : "black")};
   font-weight: bold;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border: none;
   border-radius: 8px;
-  cursor: pointer;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
+  font-size: 16px;
+
   &:hover {
-    background: #093609;
-    color: white;
+    background: ${({ disabled }) => (disabled ? "#E0E2E6" : "#093609")};
+    color: ${({ disabled }) => (disabled ? "black" : "white")};
   }
 `;
 
@@ -77,6 +83,7 @@ export const SwitchWrapper = styled.div`
   border-radius: 15px;
   transition: background-color 0.3s ease-in-out;
 `;
+
 
 export const Slider = styled.div`
   position: absolute;
@@ -103,62 +110,195 @@ export const Card = styled.div`
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
   color: black;
   text-align: center;
-  height: 80%;
-  margin-top: 30px;
+  height: 250px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
+  padding: 20px 10px;
+  margin-bottom: 45px;
+  
 `;
 
+
+export const InfoTitle = styled.h5`
+  margin: 5px 0 8px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #5c4033;
+`;
+
+export const GridInfo = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 10px;
+  text-align: center;
+  font-size: 12px;
+`;
+
+export const Item = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+export const SmallNote = styled.div`
+  margin-top: 8px;
+  font-size: 11px;
+  color: #777;
+  text-align: center;
+`;
+
+
+
 export const MiniCard = styled.div`
-  background: #EFBF86;
+  background: #f7d9b3;
+  color: black; 
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 20px;
+  border: 1px solid rgb(191, 161, 122);
+  text-shadow: 0 0 5px rgb(63, 49, 30);
   padding: 15px;
   border-radius: 10px;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
-  color: black;
-  text-align: center;
   width: 100%;
+  text-align: center;
   margin-bottom: 10px;
 `;
+
+export const RightMiniCard = styled.div`
+background: #f7d9b3;
+  color: black;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px; 
+  border: 1px solid rgb(191, 161, 122);
+  text-shadow: 0 0 5px rgb(63, 49, 30);
+  padding: 10px;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 300px;
+  text-align: center;
+  margin: 10px auto; 
+`;
+
+export const RightCardTitle = styled.h3`
+  background: #093609;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 20px;
+  text-align: center;
+  width: fit-content;
+  margin: -60px auto 20px; 
+  position: relative;
+  z-index: 5;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+`;
+
+
+export const RightMiniCardText = styled.span`
+  flex: 1;
+`;
+
+export const RightMiniCardIcon = styled.img`
+  width: 30px;
+  height: 30px;
+`;
+
+export const SectionTitle = styled.h4`
+  background: #093609;
+  color: white;
+  padding: -100px 8px 12px;
+  border-radius: 10px;
+  font-size: 16px;
+  text-align: center;
+  margin-bottom: 10px;
+`;
+
+// Ajuste especial para centrar las gráficas y sus tarjetas
+export const CenterContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 20px;
+`;
+
+export const ChartWrapper = styled.div`
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  width: 100%;
+`;
+
+
+// Ajuste del Panel derecho en general
+export const RightColumnFixed = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  overflow: hidden;
+`;
+
+
 
 export const Column = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  align-items: center;
+  gap: 200px; 
+  padding-top: 80px; 
+  padding-bottom: 30px; 
+  box-sizing: border-box;
 `;
 
-export const CenterColumn = styled(Column)`
-  justify-content: space-between;
+
+export const CenterColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 60px; 
+  padding-top: 70px; 
+  padding-bottom: 30px; 
+  box-sizing: border-box;
+  align-items: center; 
 `;
 
-export const RightColumn = styled(Column)`
-  justify-content: space-between;
-  height: 90%;
+
+export const RightColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 15px; 
+  padding: 90px 7px 100px; 
+  box-sizing: border-box;
+  max-height: none;
+  padding-bottom: 30px; 
 `;
+
+
 
 export const ControlPanel = styled(Card)`
-  padding: 65px 20px 20px;
-  height: 100%;
+  padding: 20px 20px 20px;
+  min-height: 450px;
+  align-items: center;
+  justify-content:center;
 `;
 
+ 
+ 
 export const Overlay = styled.div`
   position: absolute;
-  top: 60px;
+  top: 70px;
   left: 0;
   width: 100%;
   height: calc(100% - 60px);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   border-radius: 15px;
   display: ${({ active }) => (active ? "block" : "none")};
   z-index: 2;
 `;
 
-export const Content = styled.div`
-  position: relative;
-  z-index: 2;
-`;
 
 export const ControlButton = styled.button`
   background: ${({ disabled }) => (disabled ? "#ccc" : "#000")};
@@ -170,21 +310,56 @@ export const ControlButton = styled.button`
   border-radius: 8px;
 `;
 
-export const ChartContainer = styled.div`
+export const ChartBlock = styled.div`
   background: white;
-  padding: 15px;
   border-radius: 15px;
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  min-height: 300px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+`;
+
+export const ChartContainer = styled.div`
+  flex: 1;
+  width: 100%;
+  height: 240px;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 30px;
+  padding: 10px 0;
+`;
+
+export const ChartTitle = styled.h4`
+  background:rgba(82, 54, 22, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: bold;
+  text-align: center;
+  margin: -30px 80px 20px;
+  width: fit-content;
+  width: 100%;
+`;
+
+export const HalfChartsRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 export const StatusPanel = styled(Card)`
   padding: 20px;
-  height: 100%;
 `;
 
 export const StatusItem = styled.div`
@@ -210,15 +385,16 @@ export const MAX_TEMP = 100;
 export const STEP = 5;
 
 export const SliderContainer = styled.div`
-  width: 90%;
-  height: 12px;
+ width: 180%;
+  max-width: 1000px;
+  height: 25px;
   background: #ccced0;
   border-radius: 1000px;
   position: relative;
   display: flex;
-  align-items: center;
-  cursor: pointer;
-  margin-top: 20px;
+  align-items: left;
+  margin: 0px -50px 2px;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
 `;
 
 export const ProgressBar = styled.div`
@@ -230,17 +406,17 @@ export const ProgressBar = styled.div`
 `;
 
 export const SliderCircle = styled.div`
-  width: 22px;
-  height: 22px;
-  background: white;
-  border: 3px solid #4caf50;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.83);
+  border: 3px solid rgb(0, 0, 0);
   border-radius: 50%;
   position: absolute;
-  left: ${({ value }) => `calc(${((value - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)) * 100}% - 11px)`};
+  left: ${({ value }) => `calc(${((value - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)) * 100}% - 13px)`};
   top: 50%;
   transform: translateY(-50%);
   transition: left 0.2s ease-out;
-  cursor: grab;
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "grab")};
 `;
 
 export const MarkersContainer = styled.div`
@@ -274,3 +450,19 @@ export const Marker = styled.div`
     white-space: nowrap;
   }
 `;
+
+export const Content = styled.div`
+position: relative;
+  z-index: 2;
+
+  &[data-disabled='true'] {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+
+    ${MiniCard}, ${SliderContainer}, ${ControlButton} {
+      cursor: not-allowed !important;
+    }
+  }
+`;
+

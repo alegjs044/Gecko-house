@@ -1,20 +1,21 @@
-// backend/autoRecorder.js
+// backend/data.js
 const db = require("./db");
 
-// Últimos valores guardados (de mqttClient.js)
 let ultimaFria = null;
 let ultimaCaliente = null;
+let ultimaHumedad = null;
+let ultimaLuz = null;
 
 const ID_usuario = 1;
 const INTERVALO_MS = 1000 * 60 * 120; // 2 horas
 
-// Esta función debe ser llamada por mqttClient para mantener los valores
-const actualizarUltimosValores = (fria, caliente) => {
+const actualizarUltimosValores = (fria, caliente, humedad, luz) => {
   if (typeof fria === "number") ultimaFria = fria;
   if (typeof caliente === "number") ultimaCaliente = caliente;
+  if (typeof humedad === "number") ultimaHumedad = humedad;
+  if (typeof luz === "number") ultimaLuz = luz;
 };
 
-// Guardar cada 2 horas
 setInterval(() => {
   const now = new Date();
 
@@ -32,7 +33,21 @@ setInterval(() => {
     );
   }
 
-  console.log("🔹 Registro programado guardado en BD");
+  if (ultimaHumedad !== null) {
+    db.query(
+      "INSERT INTO humedad (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)",
+      [ID_usuario, ultimaHumedad, now]
+    );
+  }
+
+  if (ultimaLuz !== null) {
+    db.query(
+      "INSERT INTO luz_uv (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)",
+      [ID_usuario, ultimaLuz, now]
+    );
+  }
+
+  console.log("Registro automático guardado en BD");
 }, INTERVALO_MS);
 
 module.exports = { actualizarUltimosValores };
