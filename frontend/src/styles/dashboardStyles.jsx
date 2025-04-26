@@ -84,7 +84,6 @@ export const SwitchWrapper = styled.div`
   transition: background-color 0.3s ease-in-out;
 `;
 
-
 export const Slider = styled.div`
   position: absolute;
   top: 3px;

@@ -13,7 +13,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+<<<<<<< HEAD
     "framer-motion": "^12.9.2",
+=======
+>>>>>>> 6fac248fdd7276a8693df17f5dfe69b13e1a6a0f
     "jspdf": "^3.0.1",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.482.0",
