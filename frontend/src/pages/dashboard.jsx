@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
@@ -11,12 +11,14 @@ import dia from "../assets/manana.png";
 import noche from "../assets/noche.png";
 import { LIMITES } from "../constants/Limites";
 import { motion } from "framer-motion";
+
 import {
-  Container, CardTitle, ButtonGroup, ModeButton, SwitchContainer, SwitchWrapper, Slider, HiddenCheckbox,
-  Card, MiniCard, Column, SmallNote, GridInfo, CenterColumn, RightColumn, ControlPanel, Overlay, Content, RightMiniCard, 
+  Container, CardTitle, ButtonGroup, ModeButton, SwitchContainer, SwitchWrapper, Slider, HiddenCheckbox, MiniCardLuz, CardLarge,
+  Card, MiniCard, Column, SmallNote, GridInfo, ChartWithInfo, CenterColumn, RightColumn, ControlPanel, Overlay, Content, RightMiniCard, 
   RightCardTitle,ChartContainer, StatusPanel, ChartBlock, ChartTitle, StatusItem, StatusImage, CycleImage, MIN_TEMP, MAX_TEMP,
-  STEP, InfoTitle, Item,SliderContainer, ProgressBar, SliderCircle, MarkersContainer, Marker, HalfChartsRow
+  STEP, InfoTitle, Item, InfoMiniCard, SliderContainer, ProgressBar, SliderCircle, MarkersContainer, Marker, HalfChartsRow
 } from "../styles/dashboardStyles";
+
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -29,7 +31,8 @@ import {
 } from "chart.js";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
-const socket = io("http://localhost:5000");
+
+
 
 const CustomSwitch = ({ checked, onChange, disabled }) => (
   <SwitchContainer>
@@ -78,31 +81,35 @@ const CustomSlider = ({ value, onChange, disabled }) => {
 
 
 const Dashboard = () => {
-  const navigate = useNavigate();
-  const [modoAutomatico, setModoAutomatico] = useState(false);
   const [temperaturaFria, setTemperaturaFria] = useState([]);
   const [temperaturaCaliente, setTemperaturaCaliente] = useState([]);
   const [humedad, setHumedad] = useState([]);
   const [luminosidad, setLuminosidad] = useState([]);
   const [uvi, setLuzUV] = useState(false);
-  const [humidificador, setHumidificador] = useState(false);
-  const [placaTermica, setPlacaTermica] = useState(85);
   const [cicloDia, setCicloDia] = useState("dia");
   const [uviData, setUVIData] = useState([]);
+  const [modoAutomatico, setModoAutomatico] = useState(true);
+  const [placaTermica, setPlacaTermica] = useState(0);
+  const [humidificador, setHumidificador] = useState(false);
+
+
+  const navigate = useNavigate();
+  const socket = useRef(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) navigate("/login");
-    setCicloDia(new Date().getHours() >= 6 && new Date().getHours() < 18 ? "dia" : "noche");
+    const userData = JSON.parse(localStorage.getItem("userData"));
 
-    fetch("http://localhost:5000/api/dashboard/1")
-      .then(res => res.json())
-      .then(data => {
-        setTemperaturaFria(data.fria.reverse());
-        setTemperaturaCaliente(data.caliente.reverse());
-      });
+    if (!token || !userData?.ID_usuario) {
+      navigate("/login");
+      return;
+    }
 
-    socket.on("sensor-data", (data) => {
+    socket.current = io("http://localhost:5000", {
+      auth: { ID_usuario: userData.ID_usuario }
+    });
+
+    socket.current.on("sensor-data", (data) => {
       const valor = parseFloat(data.valor);
       if (isNaN(valor)) return;
       if (data.topic.includes("terrario/zonafria/User1")) setTemperaturaFria(prev => [...prev.slice(-19), valor]);
@@ -118,12 +125,28 @@ const Dashboard = () => {
         }
       }
     });
-    return () => socket.off("sensor-data");
+
+    setCicloDia(new Date().getHours() >= 6 && new Date().getHours() < 18 ? "dia" : "noche");
+
+    fetch(`http://localhost:5000/api/dashboard/${userData.ID_usuario}`)
+      .then(res => res.json())
+      .then(data => {
+        setTemperaturaFria(data.fria.reverse());
+        setTemperaturaCaliente(data.caliente.reverse());
+      });
+
+    return () => {
+      if (socket.current) {
+        socket.current.disconnect();
+        console.log("🔴 WebSocket desconectado");
+      }
+    };
   }, [navigate]);
   
       
   const cicloImagenes = { dia, noche };
-
+  
+  
 
   const evaluarParametro = (valor, { bajo, alto }) => {
     if (!Number.isFinite(valor)) return { color: "rgba(0,0,0,0.7)", mensaje: "Sin datos", icono: advertencia };
@@ -134,227 +157,296 @@ const Dashboard = () => {
 
   const UVLight = ({ on }) => (
     <motion.div
-      animate={{ opacity: on ? [0.4, 1, 0.4] : 0.2, scale: on ? [1, 1.1, 1] : 1 }}
-      transition={{ duration: 1.5, repeat: on ? Infinity : 0, repeatType: "loop" }}
-      style={{ width: 30, height: 50, background: on ? "#9C27B0" : "#555", borderRadius: "50% 50% 35% 35%", margin: "auto", marginTop: 8, boxShadow: on ? "0px 0px 8px 3pxrgb(191, 46, 216)" : "none" }}
+      animate={{
+        opacity: on ? [0.5, 1, 0.5] : 0.3,
+        scale: on ? [1, 1.05, 1] : 1,
+        boxShadow: on
+          ? "0px 0px 20px 8px rgba(156, 39, 176, 0.7)" // Glow morado
+          : "none",
+      }}
+      transition={{
+        duration: 2,
+        repeat: on ? Infinity : 0,
+        repeatType: "loop",
+      }}
+      style={{
+        width: 35,
+        height: 55,
+        background: on ? "#9C27B0" : "#555",
+        borderRadius: "50% 50% 35% 35%",
+        margin: "auto",
+        marginTop: 8,
+      }}
     />
   );
+  
 
   return (
     <>
     <Header showUserIcon />
       <Container>
-        <Column>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <Card>
-              <CardTitle>Temperatura</CardTitle>
-              <MiniCard>
-                <p>🌡️ Zona Fría: {temperaturaFria.at(-1) ?? "--"}°C</p>
-                <p>🔥 Zona Caliente: {temperaturaCaliente.at(-1) ?? "--"}°C</p>
-              </MiniCard>
-            </Card>
+      <Column>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <Card>
+        <CardTitle>Temperatura</CardTitle>
+        <MiniCard>
+          <p>🌡️ Zona Fría: {temperaturaFria.at(-1) ?? "--"}°C</p>
+          <p>🔥 Zona Caliente: {temperaturaCaliente.at(-1) ?? "--"}°C</p>
+        </MiniCard>
 
-            <Card>
-              <CardTitle>Iluminación</CardTitle>
-              <MiniCard>
-                <p>☀️ Luminosidad: {luminosidad.at(-1) ?? "--"}</p>
-                <p>🌞 Luz UV: {uvi ? "Encendida" : "Apagada"}</p>
-              </MiniCard>
-            </Card>
+        {/* Nueva Info de Temperatura aquí */}
+        <InfoMiniCard>
+          <InfoTitle>🌡️ Temperatura ({cicloDia === "dia" ? "Día" : "Noche"})</InfoTitle>
+          <GridInfo>
+            {cicloDia === "dia" ? (
+              <>
+                <Item><strong>Zona caliente:</strong> 30–35 °C</Item>
+                <Item><strong>Zona fría:</strong> 26–28 °C</Item>
+              </>
+            ) : (
+              <>
+                <Item><strong>Zona caliente:</strong> 24–26 °C</Item>
+                <Item><strong>Zona fría:</strong> 20–22 °C</Item>
+              </>
+            )}
+          </GridInfo>
+          <SmallNote>
+            ✅ Mantener dentro del rango para bienestar del gecko.
+          </SmallNote>
+        </InfoMiniCard>
+      </Card>
 
-            <Card>
-              <CardTitle>Humedad</CardTitle>
-              <MiniCard>
-                <p>💧 Humedad: {humedad.at(-1) ?? "--"}%</p>
-              </MiniCard>
-            </Card>
-          </motion.div>
-        </Column>
+      <Card>
+        <CardTitle>Iluminación</CardTitle>
+        <MiniCardLuz>
+          <p>☀️ Luminosidad: {luminosidad.at(-1) ?? "--"}</p>
+          <p> Luz UV: {uvi ? "Encendida" : "Apagada"}</p>
+        </MiniCardLuz>
+      </Card>
 
-        <CenterColumn>
+      <CardLarge>
+        <CardTitle>Humedad</CardTitle>
+        <MiniCard>
+          <p>💧 Humedad: {humedad.at(-1) ?? "--"}%</p>
+        </MiniCard>
+
+        {/* Nueva Info de Humedad aquí */}
+        <InfoMiniCard>
+          <InfoTitle>💧 Humedad</InfoTitle>
+          <GridInfo>
+            <Item><strong>Normal:</strong> 30% – 50%</Item>
+            <Item><strong>Durante muda:</strong> 60% – 80%</Item>
+          </GridInfo>
+          <SmallNote>
+            ✅ Mantener humedad adecuada para proteger la salud y el proceso de muda.
+          </SmallNote>
+        </InfoMiniCard>
+      </CardLarge>
+    </motion.div>
+  </Column>
+
+  <CenterColumn>
 
 {/* Temperatura */}
-<ChartBlock style={{ height: '280px' }}>
-  <ChartTitle>Temperatura</ChartTitle>
-  <ChartContainer>
-    <Line
-      data={{
-        labels: temperaturaFria.slice(-15).map((_, i) => {
-          const now = new Date();
-          const ts = new Date(now.getTime() - (temperaturaFria.slice(-15).length - i - 1) * 10000);
-          return ts.toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-            timeZone: "America/Mexico_City",
-          });
-        }),
-        datasets: [
-          {
-            label: "Zona Fría (°C)",
-            data: temperaturaFria.slice(-15),
-            borderColor: "#2196F3",
-            backgroundColor: "#2196F350",
-            tension: 0.3,
+<ChartWithInfo>
+  <ChartBlock style={{ height: '280px' }}>
+    <ChartTitle>Temperatura</ChartTitle>
+    <ChartContainer>
+      <Line
+        data={{
+          labels: temperaturaFria.slice(-15).map((_, i) => {
+            const now = new Date();
+            const ts = new Date(now.getTime() - (temperaturaFria.slice(-15).length - i - 1) * 10000);
+            return ts.toLocaleTimeString("es-MX", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "America/Mexico_City",
+            });
+          }),
+          datasets: [
+            {
+              label: "Zona Fría (°C)",
+              data: temperaturaFria.slice(-15),
+              borderColor: "rgb(33, 150, 243)",
+              backgroundColor: "rgb(5, 82, 145)",
+              tension: 0.3,
+            },
+            {
+              label: "Zona Caliente (°C)",
+              data: temperaturaCaliente.slice(-15),
+              borderColor: "rgb(231, 0, 0)",
+              backgroundColor: "rgb(116, 0, 0)",
+              tension: 0.3,
+            },
+          ],
+        }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: "Tiempo" } },
+            y: { title: { display: true, text: "Temperatura (°C)" } },
           },
-          {
-            label: "Zona Caliente (°C)",
-            data: temperaturaCaliente.slice(-15),
-            borderColor: "#FF5722",
-            backgroundColor: "#FF572250",
-            tension: 0.3,
-          }
-        ]
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: "Tiempo" } },
-          y: { title: { display: true, text: "Temperatura (°C)" } }
-        }
-      }}
-    />
-  </ChartContainer>
-  <MiniCard>
-  <InfoTitle>🌡️ Temperatura</InfoTitle>
-  <GridInfo>
-    <Item><strong>Fría (noche):</strong> 20–22 °C</Item>
-    <Item><strong>Fría (día):</strong> 22–32 °C</Item>
-    <Item><strong>Caliente:</strong> 24–36 °C</Item>
-  </GridInfo>
-  <SmallNote>⚠️ Evitar temperaturas fuera de rango.</SmallNote>
-</MiniCard>
-</ChartBlock>
+        }}
+      />
+    </ChartContainer>
+  </ChartBlock>
+</ChartWithInfo>
 
 {/* Iluminación y UVI */}
 <HalfChartsRow>
 
   {/* Iluminación */}
-  <ChartBlock>
-    <ChartTitle>Iluminación</ChartTitle>
-    <ChartContainer>
-      <Line
-        data={{
-          labels: luminosidad.slice(-7).map((_, i) => {
-            const now = new Date();
-            const ts = new Date(now.getTime() - (luminosidad.slice(-7).length - i - 1) * 10000);
-            return ts.toLocaleTimeString("es-MX", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-              timeZone: "America/Mexico_City",
-            });
-          }),
-          datasets: [{
-            label: "Luminosidad (lux)",
-            data: luminosidad.slice(-7),
-            backgroundColor: "yellow",
-            tension: 0.3
-          }]
-        }}
-        options={{
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { title: { display: true, text: "Tiempo" } },
-            y: { title: { display: true, text: "Luminosidad (lux)" } }
-          }
-        }}
-      />
-    </ChartContainer>
-    <MiniCard>Iluminación actual</MiniCard>
-  </ChartBlock>
+  <ChartWithInfo>
+    <ChartBlock>
+      <ChartTitle>Iluminación</ChartTitle>
+      <ChartContainer>
+        <Line
+          data={{
+            labels: luminosidad.slice(-7).map((_, i) => {
+              const now = new Date();
+              const ts = new Date(now.getTime() - (luminosidad.slice(-7).length - i - 1) * 10000);
+              return ts.toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: "America/Mexico_City",
+              });
+            }),
+            datasets: [{
+              label: "Luminosidad (lux)",
+              data: luminosidad.slice(-7),
+              borderColor: "rgb(238, 166, 10)",
+              backgroundColor: "rgb(218, 84, 7)",
+              tension: 0.3,
+            }],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { title: { display: true, text: "Tiempo" } },
+              y: { title: { display: true, text: "Luminosidad (lux)" } },
+            },
+          }}
+        />
+      </ChartContainer>
+    </ChartBlock>
 
-  {/* UVI */}
-  <ChartBlock>
-    <ChartTitle>UVI</ChartTitle>
-    <ChartContainer>
-      <Line
-        data={{
-          labels: uviData.slice(-7).map((_, i) => {
-            const now = new Date();
-            const ts = new Date(now.getTime() - (uviData.slice(-7).length - i - 1) * 10000);
-            return ts.toLocaleTimeString("es-MX", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-              timeZone: "America/Mexico_City",
-            });
-          }),
-          datasets: [{
-            label: "UV",
-            data: uviData.slice(-7),
-            borderColor: "#9C27B0",
-            backgroundColor: "#9C27B050",
-            tension: 0.3
-          }]
-        }}
-        options={{
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { title: { display: true, text: "Tiempo" } },
-            y: { title: { display: true, text: "UV" } }
-          }
-        }}
-      />
-    </ChartContainer>
-    <MiniCard>UVI actual</MiniCard>
-  </ChartBlock>
+    {/* Tarjeta de Iluminación (esta sí se queda) */}
+    <InfoMiniCard>
+      <InfoTitle>🌗 Iluminación ({cicloDia === "dia" ? "Día" : "Noche"})</InfoTitle>
+      <div>
+        {cicloDia === "dia" ? (
+          <Item><strong>Día:</strong> Iluminación + UVB 6 horas</Item>
+        ) : (
+          <Item><strong>Noche:</strong> Ambos focos apagados</Item>
+        )}
+      </div>
+      <SmallNote>✅ Respetar el ciclo natural para un desarrollo sano.</SmallNote>
+    </InfoMiniCard>
+
+  </ChartWithInfo>
+
+  {/* UV */}
+  <ChartWithInfo>
+    <ChartBlock>
+      <ChartTitle>UV</ChartTitle>
+      <ChartContainer>
+        <Line
+          data={{
+            labels: uviData.slice(-7).map((_, i) => {
+              const now = new Date();
+              const ts = new Date(now.getTime() - (uviData.slice(-7).length - i - 1) * 10000);
+              return ts.toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: "America/Mexico_City",
+              });
+            }),
+            datasets: [{
+              label: "UV",
+              data: uviData.slice(-7),
+              borderColor: "#9C27B0",
+              backgroundColor: "#9C27B050",
+              tension: 0.3,
+            }],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { title: { display: true, text: "Tiempo" } },
+              y: { title: { display: true, text: "UV" } },
+            },
+          }}
+        />
+      </ChartContainer>
+    </ChartBlock>
+
+    {/* Tarjeta de UV (esta sí se queda) */}
+    <InfoMiniCard>
+      <InfoTitle>🌞 Intensidad UV</InfoTitle>
+      <div>
+        <Item><strong>Valor ideal:</strong> 0.4 – 0.7</Item>
+      </div>
+      <SmallNote>⚠️ Evitar exposiciones prolongadas de UV.</SmallNote>
+    </InfoMiniCard>
+
+  </ChartWithInfo>
 
 </HalfChartsRow>
 
 {/* Humedad */}
-<ChartBlock>
-  <ChartTitle>Humedad</ChartTitle>
-  <ChartContainer>
-    <Line
-      data={{
-        labels: humedad.slice(-10).map((_, i) => {
-          const now = new Date();
-          const ts = new Date(now.getTime() - (humedad.slice(-10).length - i - 1) * 10000);
-          return ts.toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-            timeZone: "America/Mexico_City",
-          });
-        }),
-        datasets: [{
-          label: "Humedad (%)",
-          data: humedad.slice(-10),
-          borderColor: "#4CAF50",
-          backgroundColor: "#4CAF5050",
-          tension: 0.3
-        }]
-      }}
-      options={{
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { title: { display: true, text: "Tiempo" } },
-          y: { title: { display: true, text: "Humedad (%)" } }
-        }
-      }}
-    />
-  </ChartContainer>
-  <MiniCard>Humedad actual</MiniCard>
-</ChartBlock>
-
+<ChartWithInfo>
+  <ChartBlock>
+    <ChartTitle>Humedad</ChartTitle>
+    <ChartContainer>
+      <Line
+        data={{
+          labels: humedad.slice(-10).map((_, i) => {
+            const now = new Date();
+            const ts = new Date(now.getTime() - (humedad.slice(-10).length - i - 1) * 10000);
+            return ts.toLocaleTimeString("es-MX", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+              timeZone: "America/Mexico_City",
+            });
+          }),
+          datasets: [{
+            label: "Humedad (%)",
+            data: humedad.slice(-10),
+            borderColor: "rgb(11, 182, 54)",
+            backgroundColor: "rgb(3, 90, 25)",
+            tension: 0.3,
+          }],
+        }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: "Tiempo" } },
+            y: { title: { display: true, text: "Humedad (%)" } },
+          },
+        }}
+      />
+    </ChartContainer>
+  </ChartBlock>
+</ChartWithInfo>
 </CenterColumn>
-
 
 <RightColumn>
 <ControlPanel>
   <RightCardTitle>Panel de Control</RightCardTitle>
-
   <ButtonGroup>
     <ModeButton
       active={!modoAutomatico}
       onClick={() => {
         setModoAutomatico(false);
-        socket.emit("modo", "manual");
+        socket.current.emit("modo", "manual");
       }}
     >
       Modo Manual
@@ -363,7 +455,7 @@ const Dashboard = () => {
       active={modoAutomatico}
       onClick={() => {
         setModoAutomatico(true);
-        socket.emit("modo", "automatico");
+        socket.current.emit("modo", "automatico");
       }}
     >
       Modo Automático
@@ -379,7 +471,7 @@ const Dashboard = () => {
       onChange={(temp) => {
         setPlacaTermica(temp);
         if (!modoAutomatico) {
-          socket.emit("placa-termica", { temperatura: temp });
+          socket.current.emit("placa-termica", { temperatura: temp });
         }
       }}
       disabled={modoAutomatico}
@@ -405,7 +497,7 @@ const Dashboard = () => {
         onChange={(val) => {
           setLuzUV(val);
           if (!modoAutomatico) {
-            socket.emit("iluminacion", val);
+            socket.current.emit("iluminacion", val);
           }
         }}
         disabled={modoAutomatico}
@@ -425,7 +517,7 @@ const Dashboard = () => {
         onChange={(val) => {
           setHumidificador(val);
           if (!modoAutomatico) {
-            socket.emit("humidificador", { encendido: val });
+            socket.current.emit("humidificador", { encendido: val });
           }
         }}
         disabled={modoAutomatico}
@@ -510,7 +602,7 @@ const Dashboard = () => {
   <RightMiniCard>
     {uvi ? (
       <StatusItem color="#9C27B0">
-        <span>UV: Encendido ({uvi.at(-1)})</span>
+        <span>UV: Encendido </span>
         <UVLight on />
       </StatusItem>
     ) : (

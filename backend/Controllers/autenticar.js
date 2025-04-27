@@ -33,12 +33,22 @@ exports.login = async (req, res) => {
       { expiresIn: "2h" }
     );
 
-    res.json({ message: "Inicio de sesión exitoso", token });
+    // 👇 Responder token + info del usuario
+    res.json({
+      message: "Inicio de sesión exitoso",
+      token,
+      ID_usuario: user.ID_usuario,
+      Nombre: user.Nombre || user.Usuario,
+      Correo: user.Correo
+    });
+
   } catch (error) {
     console.error("❌ Error en login:", error.message);
     res.status(500).json({ error: "Error en el servidor" });
   }
 };
+
+
 
 // REGISTRO
 exports.register = async (req, res) => {

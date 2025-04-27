@@ -35,7 +35,7 @@ const Container = styled.div`
 const Loading = () => (
   <Container>
     <Spinner />
-    <LoadingText>Cargando datos del sensor...</LoadingText>
+    <LoadingText>Cargando datos...</LoadingText>
   </Container>
 );
 

@@ -1,3 +1,4 @@
+
 // backend/data.js
 const db = require("./db");
 
@@ -6,10 +7,31 @@ let ultimaCaliente = null;
 let ultimaHumedad = null;
 let ultimaLuz = null;
 
-const ID_usuario = 1;
-const INTERVALO_MS = 1000 * 60 * 120; // 2 horas
+let ID_usuario = null;
+const INTERVALO_MS = 1000 * 60 * 120;
 
-const actualizarUltimosValores = (fria, caliente, humedad, luz) => {
+const now = () => new Date();
+
+const guardarMedicion = (tabla, valor, zona = null, usuarioId) => {
+  if (valor == null || !usuarioId) return;
+
+  let query, params;
+
+  if (tabla === "temperatura") {
+    query = "INSERT INTO temperatura (ID_usuario, Medicion, Zona, Marca_tiempo) VALUES (?, ?, ?, ?)";
+    params = [usuarioId, valor, zona, now()];
+  } else {
+    query = `INSERT INTO ${tabla} (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)`;
+    params = [usuarioId, valor, now()];
+  }
+
+  db.query(query, params, (err) => {
+    if (err) console.error("❌ Error al guardar en BD:", err);
+  });
+};
+
+const actualizarUltimosValores = (fria, caliente, humedad, luz, usuarioId) => {
+  ID_usuario = usuarioId;
   if (typeof fria === "number") ultimaFria = fria;
   if (typeof caliente === "number") ultimaCaliente = caliente;
   if (typeof humedad === "number") ultimaHumedad = humedad;
@@ -17,37 +39,18 @@ const actualizarUltimosValores = (fria, caliente, humedad, luz) => {
 };
 
 setInterval(() => {
-  const now = new Date();
+  if (!ID_usuario) return;
 
-  if (ultimaFria !== null) {
-    db.query(
-      "INSERT INTO temperatura (ID_usuario, Medicion, Zona, Marca_tiempo) VALUES (?, ?, 'fría', ?)",
-      [ID_usuario, ultimaFria, now]
-    );
-  }
+  if (ultimaFria !== null) guardarMedicion("temperatura", ultimaFria, "fría", ID_usuario);
+  if (ultimaCaliente !== null) guardarMedicion("temperatura", ultimaCaliente, "caliente", ID_usuario);
+  if (ultimaHumedad !== null) guardarMedicion("humedad", ultimaHumedad, null, ID_usuario);
+  if (ultimaLuz !== null) guardarMedicion("luz_uv", ultimaLuz, null, ID_usuario);
 
-  if (ultimaCaliente !== null) {
-    db.query(
-      "INSERT INTO temperatura (ID_usuario, Medicion, Zona, Marca_tiempo) VALUES (?, ?, 'caliente', ?)",
-      [ID_usuario, ultimaCaliente, now]
-    );
-  }
-
-  if (ultimaHumedad !== null) {
-    db.query(
-      "INSERT INTO humedad (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)",
-      [ID_usuario, ultimaHumedad, now]
-    );
-  }
-
-  if (ultimaLuz !== null) {
-    db.query(
-      "INSERT INTO luz_uv (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)",
-      [ID_usuario, ultimaLuz, now]
-    );
-  }
-
-  console.log("Registro automático guardado en BD");
+  console.log("✅ Registro automático guardado en BD");
 }, INTERVALO_MS);
 
-module.exports = { actualizarUltimosValores };
+const guardarDatoCritico = (tabla, valor, zona = null, usuarioId) => {
+  guardarMedicion(tabla, valor, zona, usuarioId);
+};
+
+module.exports = { actualizarUltimosValores, guardarDatoCritico };

@@ -49,7 +49,18 @@ const Login = () => {
         return;
       }
 
+      // Guardar token
       localStorage.setItem("token", data.token);
+
+      // Guardar usuario completo
+      if (data.ID_usuario) {
+        localStorage.setItem("userData", JSON.stringify({
+          ID_usuario: data.ID_usuario,
+          nombre: data.Nombre || data.Usuario || "Usuario",
+          correo: data.Correo || "Sin correo",
+        }));
+      }
+
       Swal.fire({
         title: "¡Bienvenido!",
         text: "Inicio de sesión exitoso",
@@ -59,8 +70,10 @@ const Login = () => {
       }).then(() => {
         navigate("/dashboard");
       });
+
     } catch (error) {
-      Swal.fire("Error de conexión", "No se pudo conectar", "error");
+      console.error("❌ Error de conexión:", error);
+      Swal.fire("Error de conexión", "No se pudo conectar al servidor", "error");
     }
   };
 

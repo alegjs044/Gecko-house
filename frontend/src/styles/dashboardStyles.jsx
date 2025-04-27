@@ -1,4 +1,4 @@
-import styled from "styled-components";
+import styled from "styled-components"; 
 
 export const CycleImage = styled.img`
   width: 60px;
@@ -6,7 +6,7 @@ export const CycleImage = styled.img`
 `;
 
 export const Container = styled.div`
-  padding: 80px 30px 50px;
+  padding: 80px 30px 1px;
   margin: auto;
   max-width: 1400px;
   background: #f8f4e1;
@@ -14,9 +14,9 @@ export const Container = styled.div`
   box-shadow: 0px 4px 10px rgba(184, 133, 133, 0.2);
   display: grid;
   grid-template-columns: 1fr 2fr 1fr;
-  gap: 25px; 
+  gap: 10px; 
   align-items: flex-start;
-  min-height: calc(100vh - 100px);
+  min-height: 100vh; 
   box-sizing: border-box;
   overflow-x: hidden;
 
@@ -36,6 +36,7 @@ export const CardTitle = styled.h3`
   margin-bottom: 20px;
   margin: -80px 70px 60px;
   width: 60%;
+  top: -20px;
 `;
 
 export const ButtonGroup = styled.div`
@@ -103,52 +104,83 @@ export const HiddenCheckbox = styled.input`
 `;
 
 export const Card = styled.div`
+  margin-top: 30px;
+  margin-bottom:70px;
   background: rgba(123, 95, 61, 0.8);
   border: 1px solid rgba(248, 216, 186, 0.25);
   border-radius: 15px;
   box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
   color: black;
   text-align: center;
-  height: 250px;
+  height: 350px; 
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   position: relative;
-  padding: 20px 10px;
-  margin-bottom: 45px;
-  
+  padding: 60px 10px 1px;
 `;
-
 
 export const InfoTitle = styled.h5`
-  margin: 5px 0 8px;
-  font-size: 15px;
+  margin: 8px 0 12px;
+  font-size: 16px;
   font-weight: bold;
   color: #5c4033;
+  text-align: center;
+  margin-top: 2px;
+  &::after {
+    content: " (informativo)";
+    font-size: 12px;
+    font-weight: normal;
+    color: #a1887f;
+  }
 `;
+
 
 export const GridInfo = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 5px 10px;
-  text-align: center;
-  font-size: 12px;
+  gap: 5px;
+  margin-top: 8px;
+  text-align: left;
 `;
+
+
+export const ChartWithInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 600px;
+  margin: auto auto;
+  gap: -30px; 
+`;
+
 
 export const Item = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  font-weight: 500;
+  font-size: 13px;
 `;
+
 
 export const SmallNote = styled.div`
-  margin-top: 8px;
-  font-size: 11px;
-  color: #777;
+  margin-top: 15px;
+  padding: 10px;
+  font-size: 14px;
+  background: #fce8e6;
+  color: #c0392b;
   text-align: center;
+  border-radius: 8px;
+  font-weight: bold;
+  width: 90%;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
 `;
-
 
 
 export const MiniCard = styled.div`
@@ -157,13 +189,34 @@ export const MiniCard = styled.div`
   font-family: 'Courier New', Courier, monospace;
   font-size: 20px;
   border: 1px solid rgb(191, 161, 122);
-  text-shadow: 0 0 5px rgb(63, 49, 30);
-  padding: 15px;
+  box-shadow: 0 0 8px 2px rgba(63, 49, 30, 0.8);
+  font-weight: bold;
+  display: inline-block;
   border-radius: 10px;
   width: 100%;
   text-align: center;
-  margin-bottom: 10px;
+  margin-top: -40px;
+  margin-bottom: 25px;
+  padding: 10px 10px 20px;
 `;
+
+export const InfoMiniCard = styled.div`
+  background: #fff8e7;
+  color: #4b3621;
+  font-family: 'Arial', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid #d9c2a3;
+  padding: 7px 12px;
+  border-radius: 8px;
+  width: 90%;
+  margin-top: -10px;
+  max-width: 80%;
+  text-align: center;
+  line-height: 1.3;
+  box-shadow: 0 0 8px 2px rgba(0,0,0,0.3);
+`;
+
 
 export const RightMiniCard = styled.div`
 background: #f7d9b3;
@@ -171,7 +224,7 @@ background: #f7d9b3;
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px; 
   border: 1px solid rgb(191, 161, 122);
-  text-shadow: 0 0 5px rgb(63, 49, 30);
+  box-shadow: 0 0 8px 2px rgba(63, 49, 30, 0.8);
   padding: 10px;
   border-radius: 10px;
   width: 90%;
@@ -188,7 +241,7 @@ export const RightCardTitle = styled.h3`
   font-size: 20px;
   text-align: center;
   width: fit-content;
-  margin: -60px auto 20px; 
+  margin: -35px auto 20px; 
   position: relative;
   z-index: 5;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
@@ -214,7 +267,7 @@ export const SectionTitle = styled.h4`
   margin-bottom: 10px;
 `;
 
-// Ajuste especial para centrar las gráficas y sus tarjetas
+
 export const CenterContent = styled.div`
   display: flex;
   flex-direction: column;
@@ -231,8 +284,7 @@ export const ChartWrapper = styled.div`
   width: 100%;
 `;
 
-
-// Ajuste del Panel derecho en general
+// Ajuste del Panel derecho 
 export const RightColumnFixed = styled.div`
   display: flex;
   flex-direction: column;
@@ -242,14 +294,13 @@ export const RightColumnFixed = styled.div`
 `;
 
 
-
 export const Column = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 200px; 
-  padding-top: 80px; 
-  padding-bottom: 30px; 
+  gap: -600px;
+  padding-bottom: 5px; 
+  padding: -19px 0 20px 0;
   box-sizing: border-box;
 `;
 
@@ -257,35 +308,68 @@ export const Column = styled.div`
 export const CenterColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 60px; 
-  padding-top: 70px; 
-  padding-bottom: 30px; 
+  align-items: center;
+  width: 100%;  
+  gap: 100px;
+  padding-bottom: 5px; 
+  padding: 90px 0 20px 0;
   box-sizing: border-box;
-  align-items: center; 
 `;
 
+export const CardLarge = styled.div`
+  margin-top: 30px;
+  margin-bottom:70px;
+  background: rgba(123, 95, 61, 0.8);
+  border: 1px solid rgba(248, 216, 186, 0.25);
+  border-radius: 15px;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+  color: black;
+  text-align: center;
+  height: 300px; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  padding: 60px 10px 1px;
+`;
+
+export const MiniCardLuz = styled.div`
+ background: #f7d9b3;
+  color: black; 
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 20px;
+  border: 1px solid rgb(191, 161, 122);
+  box-shadow: 0 0 8px 2px rgba(63, 49, 30, 0.8);
+  font-weight: bold;
+  border-radius: 10px;
+  width: 100%;
+  margin-top: 43px;
+  align-items: center;
+  text-align: center;
+  padding: 10px 10px 10px;
+`;
 
 export const RightColumn = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 15px; 
-  padding: 90px 7px 100px; 
+  gap: 70px;
+  padding: 1px 1px 5px; 
   box-sizing: border-box;
+  width: 100%; 
   max-height: none;
-  padding-bottom: 30px; 
+  align-items: center;
 `;
 
 
-
 export const ControlPanel = styled(Card)`
-  padding: 20px 20px 20px;
+ padding: 20px 10px 5px;
   min-height: 450px;
   align-items: center;
   justify-content:center;
 `;
 
- 
- 
+
 export const Overlay = styled.div`
   position: absolute;
   top: 70px;
@@ -297,7 +381,6 @@ export const Overlay = styled.div`
   display: ${({ active }) => (active ? "block" : "none")};
   z-index: 2;
 `;
-
 
 export const ControlButton = styled.button`
   background: ${({ disabled }) => (disabled ? "#ccc" : "#000")};
@@ -320,7 +403,7 @@ export const ChartBlock = styled.div`
   min-height: 300px;
   width: 100%;
   box-sizing: border-box;
-  margin-top: 10px;
+  margin-top: 5px;
 `;
 
 export const ChartContainer = styled.div`
@@ -330,7 +413,7 @@ export const ChartContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 10px 0;
+  padding: 6px 0 10px 0; 
 `;
 
 export const ChartTitle = styled.h4`
@@ -358,7 +441,7 @@ export const HalfChartsRow = styled.div`
 `;
 
 export const StatusPanel = styled(Card)`
-  padding: 20px;
+  padding: 10px;
 `;
 
 export const StatusItem = styled.div`
@@ -411,12 +494,13 @@ export const SliderCircle = styled.div`
   border: 3px solid rgb(0, 0, 0);
   border-radius: 50%;
   position: absolute;
-  left: ${({ value }) => `calc(${((value - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)) * 100}% - 13px)`};
+  left: ${({ value }) => `calc(${((value - 20) / (100 - 20)) * 100}% - 13px)`};
   top: 50%;
   transform: translateY(-50%);
   transition: left 0.2s ease-out;
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "grab")};
 `;
+
 
 export const MarkersContainer = styled.div`
   position: absolute;
@@ -464,4 +548,3 @@ position: relative;
     }
   }
 `;
-

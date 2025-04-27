@@ -1,16 +1,17 @@
 import styled from "styled-components";
 
 const Container = styled.div`
-  padding: 50px 30px;
+  padding: 70px 30px 40px;
   margin: auto;
   max-width: 1400px;
   background: #f8f4e1;
   border-radius: 20px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: 0px 6px 12px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  min-height: 85vh;
+  gap: 30px;
+  min-height: 90vh;
+  <margin-bottom: 30px>;
 `;
 
 const Row = styled.div`
@@ -18,8 +19,6 @@ const Row = styled.div`
   flex-direction: row;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px;
-  margin: auto;
   width: 100%;
   border-radius: 25px;
 `;
@@ -27,14 +26,15 @@ const Row = styled.div`
 const ControlsRow = styled(Row)`
   background: transparent;
   justify-content: flex-start;
-  gap: 15px;
-  padding: 10px 20px;
+  gap: 20px;
+  padding: 10px 20px 0;
+  flex-wrap: wrap;
 `;
 
 const ContentRow = styled(Row)`
   flex-wrap: nowrap;
   justify-content: space-between;
-  gap: 30px;
+  gap: 40px;
 
   @media (max-width: 1200px) {
     flex-direction: column;
@@ -45,15 +45,15 @@ const ContentRow = styled(Row)`
 const CategorySelect = styled.select`
   padding: 12px 15px;
   border-radius: 25px;
-  border: 1px solid #ddd;
+  border: 1px solid #ccc;
   background-color: white;
-  width: 300px;
-  font-size: 16px;
+  width: 250px;
+  font-size: 15px;
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='black' stroke-width='2' viewBox='0 0 24 24'%3e%3cpath d='M6 9l6 6 6-6'/%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 1rem center;
-  background-size: 1em;
+  background-size: 1.2em;
 
   &:focus {
     outline: none;
@@ -64,38 +64,42 @@ const CategorySelect = styled.select`
 const RightButtonsContainer = styled.div`
   display: flex;
   gap: 15px;
+  flex-wrap: wrap;
 `;
 
 const DownloadButton = styled.button`
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 8px;
+  background-color: #ff8c00;
+  color: white;
+  border: none;
+  border-radius: 25px;
+  padding: 8px 15px;
+  font-weight: bold;
   cursor: pointer;
+  transition: background-color 0.3s;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
 
   &:hover {
-    background-color: #f5f5f5;
+    background-color: #e67e00;
+  }
+
+  &::after {
+    content: "\2193";
+    font-size: 18px;
   }
 `;
 
 const DataPanel = styled.div`
-  background: rgba(123, 95, 61, 0.8);
-  box-shadow: inset -5px -5px 10px rgba(238, 209, 146, 0.5),
-    10px 10px 20px rgba(245, 239, 230, 0.2);
-  backdrop-filter: blur(10000px);
-  filter: drop-shadow(5px 5px 10px rgba(248, 202, 132, 3));
-  border: 1px solid rgba(248, 216, 186, 0.25);
-  border-radius: 10px;
-  padding: 15px;
-  width: 50%;
+  background: rgba(123, 95, 61, 0.9);
+  border-radius: 20px;
+  padding: 20px;
+  width: 100%;
   min-width: 300px;
   min-height: 450px;
-  max-height: 500px;
   display: flex;
   flex-direction: column;
+  box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.3);
 
   @media (max-width: 1200px) {
     width: 100%;
@@ -106,61 +110,66 @@ const DataPanel = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  background-color: white;
-  border-radius: 5px;
+  background: linear-gradient(135deg, #fff, #f1f1f1);
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 0 15px rgba(0,0,0,0.5);
 `;
 
 const Th = styled.th`
-  background-color: #f0f0f0;
+  background-color: ${(props) => props.color || "#ffe8c9"};
   color: #333;
-  padding: 8px;
+  padding: 10px;
   text-align: center;
-  border: 1px solid #ddd;
   font-size: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  font-weight: bold;
+  border-bottom: 2px solid #ddd;
 `;
 
 const Td = styled.td`
-  padding: 6px 8px;
+  padding: 8px 10px;
   text-align: center;
-  border: 1px solid #ddd;
   font-size: 14px;
+  border-bottom: 1px solid #eee;
+
+  &:hover {
+    background-color: #f2f2f2;
+  }
 `;
 
 const ChartContainer = styled.div`
   background-color: white;
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 20px;
   width: 100%;
   min-height: 300px;
   display: flex;
   flex-direction: column;
+  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
 `;
 
 const CurrentValue = styled.div`
   text-align: center;
-  font-size: 3rem;
+  font-size: 2.8rem;
   font-weight: bold;
   margin-bottom: 10px;
 `;
 
 const ChartTitle = styled.h3`
   text-align: center;
-  background-color: #ff8c00;
+  background-color: ${(props) => props.bgColor || "#ff8c00"};
   color: white;
-  padding: 5px 15px;
-  border-radius: 4px;
+  padding: 6px 15px;
+  border-radius: 8px;
   margin: 0 auto 10px;
-  font-size: 16px;
+  font-size: 18px;
   display: inline-block;
 `;
 
 const ChartTitleContainer = styled.div`
   text-align: center;
-  margin-bottom: 5px;
+  margin-bottom: 15px;
 `;
 
 export {
