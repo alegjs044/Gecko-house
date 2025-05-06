@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import Header from "../components/Header";
@@ -24,6 +24,14 @@ const Login = () => {
   const [Usuario, setUsername] = useState("");
   const [Contrasena, setPassword] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const userParam = params.get("usuario");
+    const passParam = params.get("clave");
+    if (userParam) setUsername(userParam);
+    if (passParam) setPassword(passParam);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,12 +60,13 @@ const Login = () => {
       // Guardar token
       localStorage.setItem("token", data.token);
 
-      // Guardar usuario completo
+      // Guardar usuario completo con bandera temporal
       if (data.ID_usuario) {
         localStorage.setItem("userData", JSON.stringify({
           ID_usuario: data.ID_usuario,
           nombre: data.Nombre || data.Usuario || "Usuario",
           correo: data.Correo || "Sin correo",
+          temporal: data.temporal || false
         }));
       }
 
@@ -68,7 +77,11 @@ const Login = () => {
         timer: 1500,
         showConfirmButton: false,
       }).then(() => {
-        navigate("/dashboard");
+        if (data.temporal) {
+          navigate("/personalizar");
+        } else {
+          navigate("/dashboard");
+        }
       });
 
     } catch (error) {
@@ -104,15 +117,11 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <ForgotPassword onClick={() => navigate("/recuperar")}>
-              ¿Olvidaste tu contraseña?
-            </ForgotPassword>
+            <ForgotPassword onClick={() => navigate("/recuperar")}>¿Olvidaste tu contraseña?</ForgotPassword>
 
             <Button text="INICIAR SESIÓN" type="submit" />
 
-            <RegisterLink onClick={() => navigate("/registro")}>
-              ¿No tienes cuenta? Regístrate aquí
-            </RegisterLink>
+            <RegisterLink onClick={() => navigate("/registro")}>¿No tienes cuenta? Regístrate aquí</RegisterLink>
           </form>
         </LoginBox>
       </Container>

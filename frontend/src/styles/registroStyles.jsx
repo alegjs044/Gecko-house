@@ -61,7 +61,7 @@ const StyledGecko = styled.img`
 const StyledPlanta = styled.img`
   position: absolute;
   bottom: 1%;
-  left: 33%;
+  right: 70%;
   width: 200px;
 `;
 

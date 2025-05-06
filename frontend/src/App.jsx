@@ -5,12 +5,12 @@ import { jwtDecode } from "jwt-decode";
 
 import Home from "./pages/Home";
 import Login from "./pages/login";
-import Registro from "./pages/registro"; 
 import Dashboard from "./pages/dashboard";
 import Recuperar from "./pages/recuperar";
 import Historial from "./pages/historial";
 import EditUser from "./pages/editar-usuario";
 import ResetPassword from "./pages/resetpassword";
+import Personalizar from "./pages/cuenta_personalizada";
 
 function SessionValidator() {
   const navigate = useNavigate();
@@ -45,11 +45,11 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/recuperar" element={<Recuperar />} />
-        <Route path="/registro" element={<Registro />} /> 
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/historial" element={<Historial />} />
         <Route path="/editar-datos" element={<EditUser />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/personalizar" element={<Personalizar />} />
       </Routes>
     </Router>
   );

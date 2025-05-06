@@ -1,4 +1,4 @@
-// backend/mqttClient.js
+// backend/mqttClient.js (VERSIÓN ADAPTADA)
 const mqtt = require("mqtt");
 const db = require("./db");
 const { procesarAlerta } = require("./Controllers/alertasNotificaciones");
@@ -9,21 +9,12 @@ const mqttClient = mqtt.connect("mqtts://d0e185c9110d4506b80ae6e164aaf93e.s1.eu.
   password: "Gecko_House1",
 });
 
-const TOPICS = [
-  "terrario/zonafria/User1",
-  "terrario/zonacaliente/User1",
-  "terrario/humedad/User1",
-  "terrario/luminosidad/User1",
-  "terrario/uvi/User1",
-  "terrario/ciclo/User1",
-];
-
 let estadoUV = false;
 
 const limitesSistema = {
-  "terrario/zonafria/User1": { bajo: 22, alto: 32 },
-  "terrario/zonacaliente/User1": { bajo: 24, alto: 36 },
-  "terrario/humedad/User1": { bajo: 30, alto: 50 },
+  zonafria: { bajo: 22, alto: 32 },
+  zonacaliente: { bajo: 24, alto: 36 },
+  humedad: { bajo: 30, alto: 50 },
 };
 
 const shouldSave = (anterior, actual, limites, umbral = 0.5) => {
@@ -34,15 +25,15 @@ const shouldSave = (anterior, actual, limites, umbral = 0.5) => {
 
 mqttClient.on("connect", () => {
   console.log("✅ Conectado a HiveMQ");
-  mqttClient.subscribe(TOPICS);
+  mqttClient.subscribe("terrario/+/+"); 
 });
 
-const handleMessage = async (topic, message, io, ID_usuario) => {
+const handleMessage = async (topic, message, io) => {
   const valor = parseFloat(message.toString());
   const now = new Date();
-  const zona = topic.split("/")[1];
+  const [_, zona, ID_usuario] = topic.split("/");
 
-  if (topic === "terrario/uvi/User1") {
+  if (zona === "uvi") {
     const isUVOn = message.toString().toLowerCase() === "encendido";
     if (isUVOn !== estadoUV) {
       estadoUV = isUVOn;
@@ -54,9 +45,10 @@ const handleMessage = async (topic, message, io, ID_usuario) => {
     return;
   }
 
-  const limites = limitesSistema[topic];
+  const limites = limitesSistema[zona];
+  if (!limites) return; // zona no controlada
 
-  if (topic === "terrario/zonafria/User1") {
+  if (zona === "zonafria") {
     if (shouldSave(null, valor, limites)) {
       actualizarUltimosValores(valor, null, null, null, ID_usuario);
       if (valor < limites.bajo || valor > limites.alto) {
@@ -66,7 +58,7 @@ const handleMessage = async (topic, message, io, ID_usuario) => {
     }
   }
 
-  if (topic === "terrario/zonacaliente/User1") {
+  if (zona === "zonacaliente") {
     if (shouldSave(null, valor, limites)) {
       actualizarUltimosValores(null, valor, null, null, ID_usuario);
       if (valor < limites.bajo || valor > limites.alto) {
@@ -76,7 +68,7 @@ const handleMessage = async (topic, message, io, ID_usuario) => {
     }
   }
 
-  if (topic === "terrario/humedad/User1") {
+  if (zona === "humedad") {
     if (shouldSave(null, valor, limites)) {
       actualizarUltimosValores(null, null, valor, null, ID_usuario);
       if (valor < limites.bajo || valor > limites.alto) {
@@ -86,7 +78,7 @@ const handleMessage = async (topic, message, io, ID_usuario) => {
     }
   }
 
-  if (topic === "terrario/luminosidad/User1") {
+  if (zona === "luminosidad") {
     actualizarUltimosValores(null, null, null, valor, ID_usuario);
   }
 
@@ -99,9 +91,8 @@ const handleMessage = async (topic, message, io, ID_usuario) => {
   });
 };
 
-const initMQTT = (io, ID_usuario) => {
-  mqttClient.on("message", (topic, message) => handleMessage(topic, message, io, ID_usuario));
+const initMQTT = (io) => {
+  mqttClient.on("message", (topic, message) => handleMessage(topic, message, io));
 };
 
 module.exports = { mqttClient, initMQTT };
-

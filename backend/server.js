@@ -23,17 +23,25 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/email", require("./routes/email"));
 app.use("/api", require("./routes/recuperar"));
 app.use("/api", require("./routes/historial"));
+app.use("/api/dev", require("./routes/dev"));
 
 require("./data");
 
-// 🔥 Iniciar MQTT **una sola vez** al levantar el server
+// ✅ Iniciar MQTT una vez
 initMQTT(io);
 
-io.on("connection", (socket) => {
-  const ID_usuario = socket.handshake.auth.ID_usuario;
-  console.log("🟢 Cliente conectado a WebSocket | ID_usuario:", ID_usuario ?? "No enviado");
+// Mapa de sockets conectados con su ID_usuario
+const socketToUserMap = new Map();
 
-  // 🔥 Aquí solo se escucha eventos del cliente
+io.on("connection", (socket) => {
+  console.log("🟢 Cliente conectado a WebSocket");
+
+  const id_usuario = socket.handshake.auth?.ID_usuario;
+  if (id_usuario) {
+    socketToUserMap.set(socket.id, id_usuario);
+  }
+
+  // 👉 ESCUCHAR eventos del cliente AQUÍ dentro
   socket.on("placa-termica", (payload) => {
     const value = Math.max(0, Math.min(100, parseInt(payload.temperatura)));
     mqttClient.publish("terrario/placa-termica/User1", value.toString());
@@ -45,6 +53,10 @@ io.on("connection", (socket) => {
 
   socket.on("iluminacion", (estado) => {
     mqttClient.publish("terrario/iluminacion/User1", estado ? "on" : "off");
+  });
+
+  socket.on("disconnect", () => {
+    socketToUserMap.delete(socket.id);
   });
 });
 

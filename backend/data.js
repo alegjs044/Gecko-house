@@ -13,22 +13,28 @@ const INTERVALO_MS = 1000 * 60 * 120;
 const now = () => new Date();
 
 const guardarMedicion = (tabla, valor, zona = null, usuarioId) => {
-  if (valor == null || !usuarioId) return;
+  if (valor == null) return;
+
+
+  const finalUsuarioId = usuarioId === 'User1' && ID_usuario ? ID_usuario : usuarioId;
+
+  if (!finalUsuarioId) return;
 
   let query, params;
 
   if (tabla === "temperatura") {
     query = "INSERT INTO temperatura (ID_usuario, Medicion, Zona, Marca_tiempo) VALUES (?, ?, ?, ?)";
-    params = [usuarioId, valor, zona, now()];
+    params = [finalUsuarioId, valor, zona, now()];
   } else {
     query = `INSERT INTO ${tabla} (ID_usuario, Medicion, Marca_tiempo) VALUES (?, ?, ?)`;
-    params = [usuarioId, valor, now()];
+    params = [finalUsuarioId, valor, now()];
   }
 
   db.query(query, params, (err) => {
     if (err) console.error("❌ Error al guardar en BD:", err);
   });
 };
+
 
 const actualizarUltimosValores = (fria, caliente, humedad, luz, usuarioId) => {
   ID_usuario = usuarioId;
