@@ -9,7 +9,7 @@ const open = (...args) => import("open").then(mod => mod.default(...args));
 const URL_BASE = "http://localhost:3000/login";
 const claveTemporal = "temporal123";
 
-// 👉 Generar usuario y correo temporales únicos
+// Generar usuario y correo temporales únicos
 const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
 const usuarioTemporal = "user_temp_" + randomId;
 const correo = `temporal_${randomId}@gecko.com`;

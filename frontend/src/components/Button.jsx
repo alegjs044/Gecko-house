@@ -11,14 +11,20 @@ const ButtonStyled = styled.button`
   font-size: 16px;
   cursor: pointer;
   margin-top: 15px;
+  opacity: ${(props) => (props.disabled ? 0.6 : 1)};
+  pointer-events: ${(props) => (props.disabled ? "none" : "auto")};
 
   &:hover {
     background-color: #4b8757;
   }
 `;
 
-const Button = ({ text, onClick }) => {
-  return <ButtonStyled onClick={onClick}>{text}</ButtonStyled>;
+const Button = ({ text, onClick, type = "button", disabled = false }) => {
+  return (
+    <ButtonStyled onClick={onClick} type={type} disabled={disabled}>
+      {text}
+    </ButtonStyled>
+  );
 };
 
 export default Button;

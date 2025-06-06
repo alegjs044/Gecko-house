@@ -23,6 +23,7 @@ const Login = () => {
   const [headerHeight, setHeaderHeight] = useState(0);
   const [Usuario, setUsername] = useState("");
   const [Contrasena, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,62 +34,59 @@ const Login = () => {
     if (passParam) setPassword(passParam);
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
 
-    if (!Usuario || !Contrasena) {
-      Swal.fire("Campos requeridos", "Todos los campos son obligatorios", "warning");
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setIsLoading(true);
+
+  if (!Usuario || !Contrasena) {
+    Swal.fire("Campos requeridos", "Todos los campos son obligatorios", "warning");
+    setIsLoading(false);
+    return;
+  }
+
+  try {
+    const response = await fetch("http://localhost:5000/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Usuario, Contrasena }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.token || !data.ID_usuario) {
+      Swal.fire("Error", data.error || "Usuario o contraseña incorrectos", "error");
+      setIsLoading(false);
       return;
     }
 
-    try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ Usuario, Contrasena }),
-      });
+    const userData = {
+      ID_usuario: data.ID_usuario,
+      nombre: data.Nombre || data.Usuario,
+      correo: data.Correo,
+      temporal: data.temporal,
+    };
 
-      const data = await response.json();
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("userData", JSON.stringify(userData));
 
-      if (!response.ok) {
-        Swal.fire("Error", data.error || "Usuario o contraseña incorrectos", "error");
-        return;
-      }
+    Swal.fire({
+      title: "¡Bienvenido!",
+      text: "Inicio de sesión exitoso",
+      icon: "success",
+      timer: 1500,
+      showConfirmButton: false,
+    }).then(() => {
+      navigate(userData.temporal ? "/personalizar" : "/dashboard");
+    });
 
-      // Guardar token
-      localStorage.setItem("token", data.token);
+  } catch (error) {
+    Swal.fire("Error", "No se pudo conectar al servidor", "error");
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-      // Guardar usuario completo con bandera temporal
-      if (data.ID_usuario) {
-        localStorage.setItem("userData", JSON.stringify({
-          ID_usuario: data.ID_usuario,
-          nombre: data.Nombre || data.Usuario || "Usuario",
-          correo: data.Correo || "Sin correo",
-          temporal: data.temporal || false
-        }));
-      }
-
-      Swal.fire({
-        title: "¡Bienvenido!",
-        text: "Inicio de sesión exitoso",
-        icon: "success",
-        timer: 1500,
-        showConfirmButton: false,
-      }).then(() => {
-        if (data.temporal) {
-          navigate("/personalizar");
-        } else {
-          navigate("/dashboard");
-        }
-      });
-
-    } catch (error) {
-      console.error("❌ Error de conexión:", error);
-      Swal.fire("Error de conexión", "No se pudo conectar al servidor", "error");
-    }
-  };
 
   return (
     <>
@@ -100,6 +98,7 @@ const Login = () => {
 
         <LoginBox>
           <Title>INICIO DE SESIÓN</Title>
+
           <form onSubmit={handleSubmit}>
             <Label>Usuario</Label>
             <InputField
@@ -107,6 +106,7 @@ const Login = () => {
               placeholder="Ingresa tu usuario"
               value={Usuario}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={isLoading}
             />
 
             <Label>Contraseña</Label>
@@ -115,13 +115,22 @@ const Login = () => {
               placeholder="Ingresa tu contraseña"
               value={Contrasena}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
             />
 
-            <ForgotPassword onClick={() => navigate("/recuperar")}>¿Olvidaste tu contraseña?</ForgotPassword>
+            <ForgotPassword onClick={() => navigate("/recuperar")}>
+              ¿Olvidaste tu contraseña?
+            </ForgotPassword>
 
-            <Button text="INICIAR SESIÓN" type="submit" />
+            <Button 
+              text={isLoading ? "INICIANDO SESIÓN..." : "INICIAR SESIÓN"} 
+              type="submit" 
+              disabled={isLoading}
+            />
 
-            <RegisterLink onClick={() => navigate("/registro")}>¿No tienes cuenta? Regístrate aquí</RegisterLink>
+            <RegisterLink onClick={() => navigate("/registro")}>
+              ¿No tienes cuenta? Regístrate aquí
+            </RegisterLink>
           </form>
         </LoginBox>
       </Container>

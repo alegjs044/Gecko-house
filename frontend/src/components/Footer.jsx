@@ -1,5 +1,6 @@
-import React from "react";
 import styled from "styled-components";
+import React, { useState } from "react";
+import ComplaintModal from "./ComplaintModal";
 
 // Añade este componente para crear espacio entre el contenido y el footer
 export const ContentContainer = styled.div`
@@ -78,24 +79,32 @@ const FooterText = styled.p`
 `;
 
 const Footer = () => {
+  const [showComplaintModal, setShowComplaintModal] = useState(false);
+
   return (
-    <FooterContainer>
-      <FooterContent>
-        <FooterLeft>
-          <FooterLink href="#">Soporte</FooterLink>
-        </FooterLeft>
-        <FooterCenter>
-          <FooterLink href="#">Términos</FooterLink>
-          <FooterLink href="#">Privacidad</FooterLink>
-          <FooterLink href="#">Cookies</FooterLink>
-        </FooterCenter>
-        <FooterRight>
-          <FooterLink href="#">FAQ</FooterLink>
-        </FooterRight>
-      </FooterContent>
-      <Divider />
-      <FooterText>© 2024 Todos los Derechos Reservados</FooterText>
-    </FooterContainer>
+    <>
+      <FooterContainer>
+        <FooterContent>
+          <FooterLeft>
+            <FooterLink href="#" onClick={() => setShowComplaintModal(true)}>Soporte</FooterLink>
+          </FooterLeft>
+          <FooterCenter>
+            <FooterLink ></FooterLink>
+            <FooterLink ></FooterLink>
+            <FooterLink ></FooterLink>
+          </FooterCenter>
+          <FooterRight>
+            <FooterLink href="/faq">FAQ</FooterLink>
+          </FooterRight>
+        </FooterContent>
+        <Divider />
+        <FooterText>© 2024 Todos los Derechos Reservados</FooterText>
+      </FooterContainer>
+
+      {showComplaintModal && (
+        <ComplaintModal onClose={() => setShowComplaintModal(false)} /> // ✅ Correcto
+      )}
+    </>
   );
 };
 

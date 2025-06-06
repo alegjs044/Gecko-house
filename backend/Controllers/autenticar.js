@@ -4,28 +4,56 @@ const db = require("../db");
 
 const SECRET_KEY = process.env.SECRET_KEY || "clave_segura";
 
-// 👉 LOGIN
+// 👉 LOGIN CON LOGS PERO SIN CAMBIAR LA ESTRUCTURA
 exports.login = async (req, res) => {
   try {
     const { Usuario, Contrasena } = req.body;
+    
+    // ✅ LOGS PARA DEBUGGING
+    console.log('🔐 === INTENTO DE LOGIN ===');
+    console.log('Usuario:', Usuario);
+    console.log('Contraseña length:', Contrasena?.length);
+    
     if (!Usuario || !Contrasena) {
+      console.log('❌ Campos faltantes');
       return res.status(400).json({ error: "Todos los campos son obligatorios" });
     }
 
-    const [results] = await db.promise().query(
+    // ✅ USAR EL NUEVO MÉTODO executeQuery
+    console.log('🔍 Buscando usuario en base de datos...');
+    const results = await db.executeQuery(
       "SELECT * FROM users WHERE Usuario = ?",
       [Usuario]
     );
 
+    console.log('📊 Resultados de búsqueda:', {
+      found: results.length > 0,
+      totalResults: results.length
+    });
+
     if (!results.length) {
+      console.log('❌ Usuario no encontrado:', Usuario);
       return res.status(404).json({ error: "Usuario o contraseña incorrectos" });
     }
 
     const user = results[0];
+    console.log('👤 Usuario encontrado:', {
+      ID_usuario: user.ID_usuario,
+      Usuario: user.Usuario,
+      Correo: user.Correo
+    });
+
+    // ✅ VERIFICAR CONTRASEÑA
+    console.log('🔐 Verificando contraseña...');
     const isMatch = await bcrypt.compare(Contrasena, user.Contrasena);
+    console.log('🔍 Resultado comparación:', isMatch);
+    
     if (!isMatch) {
+      console.log('❌ Contraseña incorrecta para usuario:', Usuario);
       return res.status(400).json({ error: "Usuario o contraseña incorrectos" });
     }
+
+    console.log('✅ Contraseña verificada correctamente');
 
     const esTemporal = user.Usuario.startsWith("user_temp_");
 
@@ -35,14 +63,22 @@ exports.login = async (req, res) => {
       { expiresIn: "2h" }
     );
 
-    res.json({
+    console.log('✅ Token generado exitosamente');
+
+    // ✅ MANTENER LA MISMA ESTRUCTURA DE RESPUESTA QUE FUNCIONA
+    const response = {
       message: "Inicio de sesión exitoso",
       token,
       ID_usuario: user.ID_usuario,
       Nombre: user.Nombre || user.Usuario,
       Correo: user.Correo,
       temporal: esTemporal
-    });
+    };
+
+    console.log('🎉 Login exitoso para usuario:', user.ID_usuario);
+    console.log('📤 Enviando respuesta exitosa');
+
+    res.json(response);
 
   } catch (error) {
     console.error("❌ Error en login:", error.message);
@@ -50,18 +86,15 @@ exports.login = async (req, res) => {
   }
 };
 
-
-// EDITAR USUARIO
+// EDITAR USUARIO (mantener igual)
 exports.editUser = async (req, res) => {
   const { Usuario, Contrasena, Correo, token } = req.body;
   if (!token) return res.status(401).json({ error: "Token no proporcionado" });
 
   try {
-    const decoded = jwt.verify(token, SECRET_KEY);
-    const { id: userId } = decoded;
+    const { id: userId } = jwt.verify(token, SECRET_KEY);
 
-    // Validar usuario duplicado
-    const [usuarioDuplicado] = await db.promise().query(
+    const usuarioDuplicado = await db.executeQuery(
       "SELECT * FROM users WHERE Usuario = ? AND ID_usuario != ?",
       [Usuario, userId]
     );
@@ -69,8 +102,7 @@ exports.editUser = async (req, res) => {
       return res.status(400).json({ error: "El nombre de usuario ya está en uso" });
     }
 
-    // Validar correo duplicado
-    const [correoDuplicado] = await db.promise().query(
+    const correoDuplicado = await db.executeQuery(
       "SELECT * FROM users WHERE Correo = ? AND ID_usuario != ?",
       [Correo, userId]
     );
@@ -80,19 +112,21 @@ exports.editUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(Contrasena, 10);
 
-    await db.promise().query(
-      "UPDATE users SET ID_usuario = ?, Usuario = ?, Correo = ?, Contrasena = ? WHERE ID_usuario = ?",
-      [Usuario, Usuario, Correo, hashedPassword, userId]
-    );    
+    await db.executeQuery(
+      `UPDATE users 
+         SET Usuario   = ?,
+             Correo    = ?,
+             Contrasena= ?
+       WHERE ID_usuario = ?`,
+      [Usuario, Correo, hashedPassword, userId]
+    );   
     
-
     const newToken = jwt.sign(
-      { id: Usuario, email: Correo, user: Usuario },
+      { id: userId, email: Correo, user: Usuario },
       SECRET_KEY,
-      { expiresIn: "2h" }
+      { expiresIn: "3h" }
     );
     
-
     res.json({ message: "Usuario actualizado", token: newToken });
 
   } catch (error) {

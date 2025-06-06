@@ -1,4 +1,3 @@
-// controllers/dev.js
 const bcrypt = require("bcryptjs");
 const db = require("../db");
 
