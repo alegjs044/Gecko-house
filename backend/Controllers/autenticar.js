@@ -4,32 +4,18 @@ const db = require("../db");
 
 const SECRET_KEY = process.env.SECRET_KEY || "clave_segura";
 
-// 👉 LOGIN CON LOGS PERO SIN CAMBIAR LA ESTRUCTURA
+// LOGIN 
 exports.login = async (req, res) => {
   try {
     const { Usuario, Contrasena } = req.body;
-    
-    // ✅ LOGS PARA DEBUGGING
-    console.log('🔐 === INTENTO DE LOGIN ===');
-    console.log('Usuario:', Usuario);
-    console.log('Contraseña length:', Contrasena?.length);
-    
     if (!Usuario || !Contrasena) {
       console.log('❌ Campos faltantes');
       return res.status(400).json({ error: "Todos los campos son obligatorios" });
     }
-
-    // ✅ USAR EL NUEVO MÉTODO executeQuery
-    console.log('🔍 Buscando usuario en base de datos...');
     const results = await db.executeQuery(
       "SELECT * FROM users WHERE Usuario = ?",
       [Usuario]
     );
-
-    console.log('📊 Resultados de búsqueda:', {
-      found: results.length > 0,
-      totalResults: results.length
-    });
 
     if (!results.length) {
       console.log('❌ Usuario no encontrado:', Usuario);
@@ -43,10 +29,9 @@ exports.login = async (req, res) => {
       Correo: user.Correo
     });
 
-    // ✅ VERIFICAR CONTRASEÑA
-    console.log('🔐 Verificando contraseña...');
+    //Verificar contraseña
     const isMatch = await bcrypt.compare(Contrasena, user.Contrasena);
-    console.log('🔍 Resultado comparación:', isMatch);
+  
     
     if (!isMatch) {
       console.log('❌ Contraseña incorrecta para usuario:', Usuario);
@@ -63,9 +48,6 @@ exports.login = async (req, res) => {
       { expiresIn: "2h" }
     );
 
-    console.log('✅ Token generado exitosamente');
-
-    // ✅ MANTENER LA MISMA ESTRUCTURA DE RESPUESTA QUE FUNCIONA
     const response = {
       message: "Inicio de sesión exitoso",
       token,
@@ -76,17 +58,16 @@ exports.login = async (req, res) => {
     };
 
     console.log('🎉 Login exitoso para usuario:', user.ID_usuario);
-    console.log('📤 Enviando respuesta exitosa');
 
     res.json(response);
 
   } catch (error) {
     console.error("❌ Error en login:", error.message);
-    res.status(500).json({ error: "Error en el servidor" });
+    res.status(500).json({ error: "Error de conexión" });
   }
 };
 
-// EDITAR USUARIO (mantener igual)
+// EDITAR USUARIO 
 exports.editUser = async (req, res) => {
   const { Usuario, Contrasena, Correo, token } = req.body;
   if (!token) return res.status(401).json({ error: "Token no proporcionado" });

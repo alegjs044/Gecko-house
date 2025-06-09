@@ -13,7 +13,6 @@ import {
   Title,
   Label,
   LoginBox,
-  RegisterLink,
   ForgotPassword,
   StyledGecko,
   StyledPlanta,
@@ -127,10 +126,6 @@ const handleSubmit = async (e) => {
               type="submit" 
               disabled={isLoading}
             />
-
-            <RegisterLink onClick={() => navigate("/registro")}>
-              ¿No tienes cuenta? Regístrate aquí
-            </RegisterLink>
           </form>
         </LoginBox>
       </Container>

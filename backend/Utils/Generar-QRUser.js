@@ -1,10 +1,37 @@
-const QRCode = require("qrcode");
+// AL INICIO del archivo, antes de todo:
+require('dotenv').config({ path: '../.env' });
+const QRCode = require("qrcode"); 
 const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const db = require("../db");
 const open = (...args) => import("open").then(mod => mod.default(...args));
+
+const mysql = require('mysql2');
+
+const dbConfig = mysql.createConnection({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,  
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
+  ssl: { rejectUnauthorized: false }
+});
+
+// Agregar soporte para promises
+db.promise = () => {
+  return {
+    query: (sql, params) => {
+      return new Promise((resolve, reject) => {
+        db.query(sql, params, (error, results) => {
+          if (error) reject(error);
+          else resolve([results]);
+        });
+      });
+    }
+  };
+};
 
 const URL_BASE = "http://localhost:3000/login";
 const claveTemporal = "temporal123";

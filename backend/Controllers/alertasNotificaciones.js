@@ -9,21 +9,23 @@ const axios = require("axios");
  * @param {string} descripcion - Descripción del evento
  * @param {number} valor - Valor medido
  */
-const procesarAlerta = async (tipo, descripcion, valor, ciclo, muda) => {
+
+
+const procesarAlerta = async (tipo, descripcion, valor, ciclo, muda, zonaSensor) => {
   try {
     await axios.post("http://localhost:5000/api/email/send-email", {
       tipo,
       descripcion,
       valor,
       ciclo,
-      muda
+      muda,
+      zona: zonaSensor  // ✅ usar el parámetro recibido correctamente
     });
 
-    console.log(`📢 Alerta de ${tipo} procesada y correo enviado`);
+    console.log(`📢 Alerta de ${tipo} enviada con zona ${zonaSensor}`);
   } catch (err) {
     console.error("❌ Error al procesar alerta:", err.message);
   }
 };
-
 
 module.exports = { procesarAlerta };

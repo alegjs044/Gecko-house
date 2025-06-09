@@ -178,7 +178,6 @@ const Dashboard = () => {
   const [temperaturaCaliente, setTemperaturaCaliente] = useState([]);
   const [humedad, setHumedad] = useState([]);
   const [luminosidad, setLuminosidad] = useState([]);
-  const [sessionId] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
   const [uviData, setUVIData] = useState([]);
   const [uvi, setLuzUV] = useState(false);
   const [cicloDia, setCicloDia] = useState("dia");
@@ -196,18 +195,9 @@ const Dashboard = () => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [mensajeActual, setMensajeActual] = useState(mensajesInfo[0]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMensajeActual(prev => {
-        const index = mensajesInfo.indexOf(prev);
-        return mensajesInfo[(index + 1) % mensajesInfo.length];
-      });
-    }, 6000); // cambia cada 6 segundos
-    return () => clearInterval(interval);
-  }, []);
 
-  const [startTime] = useState(() => {
-    const saved = localStorage.getItem('sessionStartTime');
+    const [startTime, setStartTime] = useState(() => {
+    const saved = localStorage.getItem("sessionStartTime");
     return saved ? parseInt(saved) : Date.now();
   });
   const [elapsedTime, setElapsedTime] = useState("0s");
@@ -215,29 +205,30 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const socket = useRef(null);
 
-  // contador de tiempo
-  useEffect(() => {
-    localStorage.setItem('sessionStartTime', startTime.toString());
-    
+ useEffect(() => {
     const interval = setInterval(() => {
-      const diff = Date.now() - startTime;
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
-      if (hours > 0) {
-        setElapsedTime(`${hours}h ${minutes}m ${seconds}s`);
-      } else if (minutes > 0) {
-        setElapsedTime(`${minutes}m ${seconds}s`);
-      } else {
-        setElapsedTime(`${seconds}s`);
-      }
+      setMensajeActual(prev => {
+        const index = mensajesInfo.indexOf(prev);
+        return mensajesInfo[(index + 1) % mensajesInfo.length];
+      });
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const seconds = Math.floor((now - startTime) / 1000);
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      setElapsedTime(`${h}h ${m}m ${s}s`);
     }, 1000);
-    
     return () => clearInterval(interval);
   }, [startTime]);
 
-  // Al cargar el componente:
+
   useEffect(() => {
     const savedMode = localStorage.getItem("modoGecko");
     if (savedMode === "manual") {
@@ -247,10 +238,10 @@ const Dashboard = () => {
     }
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
     const token = localStorage.getItem("token");
     const userDataStr = localStorage.getItem("userData");
-    
+
     let userData;
     try {
       userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -273,16 +264,12 @@ const Dashboard = () => {
       return;
     }
 
-    console.log('✅usuario:', ID_usuario);
+      const newStart = Date.now();
+    localStorage.setItem("sessionStartTime", newStart.toString());
+    setStartTime(newStart);
 
-    setModoAutomatico(true);
-    setControlFoco(false);
-    setControlUV(false);
-    setHumidificador(false);
-    setPlacaTermica(0);
-
-    socket.current = io("http://localhost:5000", { 
-      auth: { 
+   socket.current = io("http://localhost:5000", {
+      auth: {
         ID_usuario: ID_usuario,
         token: token
       },
@@ -293,8 +280,9 @@ const Dashboard = () => {
     });
 
     socket.current.on("connect", () => {
+      console.log('✅ Socket conectado correctamente');
       setSocketConnected(true);
-      
+
       socket.current.emit('user-identification', {
         ID_usuario: ID_usuario,
         timestamp: new Date().toISOString(),
@@ -313,41 +301,50 @@ const Dashboard = () => {
     });
 
     socket.current.on("user-confirmed", (data) => {
+      console.log('✅ Usuario confirmado por el servidor:', data);
     });
 
+    // 🔧 MANEJO DE DATOS DE SENSORES MEJORADO
     socket.current.on("sensor-data", (data) => {
+      // Solo procesar datos del usuario actual
+      if (data.ID_usuario && data.ID_usuario !== ID_usuario) {
+        console.log(`🚫 Datos rechazados - no son del usuario ${ID_usuario}:`, data);
+        return;
+      }
+
+      console.log('📊 Datos de sensor recibidos:', data);
+
       if (data.zona === "muda") {
         const enMudaValue = data.valor === 1 || data.valor === true;
         console.log('🦎 Estado de muda:', enMudaValue);
         setEnMuda(enMudaValue);
         return;
       }
-      
+
       if (data.zona === "ciclo") {
         const ciclo = typeof data.valor === 'string' ? data.valor.toLowerCase() : data.valor;
         console.log('🌅 Ciclo actualizado:', ciclo);
         setCicloDia(ciclo);
         return;
       }
-      
+
       const valor = parseFloat(data.valor);
       if (isNaN(valor)) {
+        console.warn('⚠️ Valor de sensor inválido:', data.valor);
         return;
       }
-      
-      if (data.zona === "temperatura" || 
-          data.topic.includes("zonafria") || 
-          data.topic.includes("fria") ||
-          data.topic.includes("zonacaliente") || 
-          data.topic.includes("caliente")) {
-        
+
+      if (data.zona === "temperatura" ||
+        data.topic?.includes("zonafria") || data.topic?.includes("fria") ||
+        data.topic?.includes("zonacaliente") || data.topic?.includes("caliente")) {
+
         let zona = null;
-        if (data.topic.includes("zonafria") || data.topic.includes("fria")) {
+        if (data.topic?.includes("zonafria") || data.topic?.includes("fria")) {
           zona = "fria";
-        } else if (data.topic.includes("zonacaliente") || data.topic.includes("caliente")) {
+        } else if (data.topic?.includes("zonacaliente") || data.topic?.includes("caliente")) {
           zona = "caliente";
         }
-        
+
         if (zona === "fria") {
           console.log('❄️ Temperatura fría:', valor);
           setTemperaturaFria(prev => [...prev.slice(-49), valor]);
@@ -357,92 +354,117 @@ const Dashboard = () => {
         }
         return;
       }
-      
-      if (data.zona === "humedad" || data.topic.includes("humedad")) {
+
+      if (data.zona === "humedad" || data.topic?.includes("humedad")) {
         console.log('💧 Humedad:', valor);
         setHumedad(prev => [...prev.slice(-49), valor]);
-      } else if (data.zona === "luminosidad" || data.topic.includes("luminosidad")) {
+      } else if (data.zona === "luminosidad" || data.topic?.includes("luminosidad")) {
         console.log('☀️ Luminosidad:', valor);
         setLuminosidad(prev => [...prev.slice(-49), valor]);
-      } else if (data.zona === "luz_uv" || data.topic.includes("uvi")) {
+      } else if (data.zona === "luz_uv" || data.topic?.includes("uvi")) {
         console.log('🔆 UV recibido:', valor);
         setLuzUV(valor > 0);
         setUVIData(prev => [...prev.slice(-49), valor]);
       }
     });
 
-socket.current.on("actuador-data", (data) => {
-  const { zona, valor } = data;
-  const numeric = typeof valor === "string" ? parseInt(valor) : valor;
+    // 🔧 MANEJO DE CONFIRMACIONES DE ACTUADORES MEJORADO
+    socket.current.on("actuador-confirmado", (data) => {
+      // Solo procesar confirmaciones del usuario actual
+      if (data.ID_usuario && data.ID_usuario !== ID_usuario) {
+        console.log(`🚫 Confirmación rechazada - no es del usuario ${ID_usuario}:`, data);
+        return;
+      }
 
-  switch (zona) {
-    case "placaP":
-    case "placa":
-      setPlacaTermica(numeric);
-      break;
-    case "humidificadorP":
-    case "humidificador":
-      setHumidificador(numeric === 1);
-      break;
-    case "focoP":
-    case "foco":
-      setControlFoco(numeric === 1);
-      break;
-    case "focouviP":
-    case "focouvi":
-    case "uv":
-      setControlUV(numeric === 1);
-      break;
-    case "modo":
-  const isAuto = numeric === 1;
-  setModoAutomatico(isAuto);
-  localStorage.setItem("modoGecko", isAuto ? "auto" : "manual");
-  showModeToast(isAuto, setShowToast, setToastMessage);
-  break;
-    default:
-      break;
-  }
-});
+      console.log('✅ Confirmación de actuador recibida:', data);
+      const { zona, valor } = data;
+      const numeric = typeof valor === "string" ? parseInt(valor) : valor;
 
-    // CARGAR DATOS INICIALES
+      switch (zona) {
+        case "placaP":
+        case "placa":
+          setPlacaTermica(numeric);
+          console.log(`🔥 Placa térmica actualizada: ${numeric}%`);
+          break;
+
+        case "humidificadorP":
+        case "humidificador":
+          setHumidificador(numeric === 1);
+          setBloqueoHumidificador(false);
+          console.log(`💧 Humidificador actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          break;
+
+        case "focoP":
+        case "foco":
+          setControlFoco(numeric === 1);
+          setBloqueoFoco(false);
+          console.log(`💡 Foco actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          break;
+
+        case "focouviP":
+        case "focouvi":
+        case "uv":
+          setControlUV(numeric === 1);
+          setBloqueoUV(false);
+          console.log(`🔆 UV actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          break;
+
+        case "modo":
+          const isAuto = numeric === 1;
+          setModoAutomatico(isAuto);
+          localStorage.setItem("modoGecko", isAuto ? "auto" : "manual");
+          showModeToast(isAuto, setShowToast, setToastMessage);
+          console.log(`⚙️ Modo actualizado: ${isAuto ? 'AUTOMÁTICO' : 'MANUAL'}`);
+          break;
+
+        default:
+          console.warn(`🔁 Zona desconocida en actuador-confirmado: ${zona}`);
+      }
+    });
+
+    // 🔧 CARGAR DATOS INICIALES DE TEMPERATURA
     fetch(`http://localhost:5000/api/historial/temperatura?ID_usuario=${ID_usuario}`)
       .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
       .then(data => {
         if (data.length > 0) {
           const fria = data.filter(d => d.zona === 'fria' || d.zona === 'fría').map(d => d.medicion);
           const caliente = data.filter(d => d.zona === 'caliente').map(d => d.medicion);
-          
+
           setTemperaturaFria(fria.slice(-50));
           setTemperaturaCaliente(caliente.slice(-50));
+          console.log(`📊 Datos de temperatura cargados: ${fria.length} fría, ${caliente.length} caliente`);
         }
       })
       .catch(error => {
         console.error("❌ Error cargando datos de temperatura:", error);
       });
 
-    // CARGAR HUMEDAD
+    // 🔧 CARGAR DATOS INICIALES DE HUMEDAD
     fetch(`http://localhost:5000/api/historial/humedad?ID_usuario=${ID_usuario}`)
       .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
       .then(data => {
         if (data.length > 0) {
           const humedadValues = data.map(d => d.medicion);
           setHumedad(humedadValues.slice(-50));
+          console.log(`📊 Datos de humedad cargados: ${humedadValues.length} registros`);
         }
       })
       .catch(error => {
         console.error("❌ Error cargando datos de humedad:", error);
       });
 
-    // CLEANUP
+    // CLEANUP AL DESMONTAR
     return () => {
       if (socket.current) {
+        console.log('🔌 Desconectando socket...');
         socket.current.disconnect();
         socket.current = null;
       }
       setSocketConnected(false);
     };
-  }, [navigate]);
+  }, [navigate]); // Solo navigate como dependencia
 
+  // 🔧 FUNCIONES DE CONTROL MEJORADAS
   const handlePlacaChange = (newValue) => {
     const val = Math.max(0, Math.min(100, newValue));
     setPlacaTermica(val);
@@ -457,86 +479,101 @@ socket.current.on("actuador-data", (data) => {
       console.log('⚠️ Modo automático activo, comando ignorado');
       return;
     }
-    
+
     if (!socket.current?.connected) {
       console.error('❌ Socket no conectado, no se puede enviar comando');
       return;
     }
-    
+
     switch (type) {
       case 'uv':
-        if (bloqueoUV) return;
+        if (bloqueoUV) {
+          console.log('⚠️ UV bloqueado, esperando respuesta...');
+          return;
+        }
+
         setBloqueoUV(true);
-        const estadoUV = !controlUV;
-        console.log(`🔆 Enviando comando UV: ${estadoUV ? 'ON' : 'OFF'}`);
-        
-        socket.current.emit("control-uv", { encendido: estadoUV });
-        
+        const nuevoEstadoUV = !controlUV;
+
+        console.log(`🔆 Enviando comando UV: ${nuevoEstadoUV ? 'ON' : 'OFF'}`);
+        socket.current.emit("control-uv", { encendido: nuevoEstadoUV });
+
+        // Timeout de seguridad
         setTimeout(() => {
-          setControlUV(estadoUV);
           setBloqueoUV(false);
-        }, 1000);
+          console.log('🔆 Timeout UV - desbloqueando control');
+        }, 3000);
         break;
-        
+
       case 'foco':
-        if (bloqueoFoco) return;
+        if (bloqueoFoco) {
+          console.log('⚠️ Foco bloqueado, esperando respuesta...');
+          return;
+        }
+
         setBloqueoFoco(true);
-        const estadoFoco = !controlFoco;
-        console.log(`💡 Enviando comando foco: ${estadoFoco ? 'ON' : 'OFF'}`);
-        
-        socket.current.emit("control-foco", { encendido: estadoFoco });
-        
+        const nuevoEstadoFoco = !controlFoco;
+
+        console.log(`💡 Enviando comando foco: ${nuevoEstadoFoco ? 'ON' : 'OFF'}`);
+        socket.current.emit("control-foco", { encendido: nuevoEstadoFoco });
+
+        // Timeout de seguridad
         setTimeout(() => {
-          setControlFoco(estadoFoco);
           setBloqueoFoco(false);
-        }, 1000);
+          console.log('💡 Timeout Foco - desbloqueando control');
+        }, 3000);
         break;
-        
+
       case 'humidificador':
-        if (bloqueoHumidificador) return;
+        if (bloqueoHumidificador) {
+          console.log('⚠️ Humidificador bloqueado, esperando respuesta...');
+          return;
+        }
+
         setBloqueoHumidificador(true);
-        const estadoHum = !humidificador;
-        console.log(`💧 Enviando comando humidificador: ${estadoHum ? 'ON' : 'OFF'}`);
-        
-        socket.current.emit("control-humidificador", { encendido: estadoHum });
-        
+        const nuevoEstadoHum = !humidificador;
+
+        console.log(`💧 Enviando comando humidificador: ${nuevoEstadoHum ? 'ON' : 'OFF'}`);
+        socket.current.emit("control-humidificador", { encendido: nuevoEstadoHum });
+
+        // Timeout de seguridad
         setTimeout(() => {
-          setHumidificador(estadoHum);
           setBloqueoHumidificador(false);
-        }, 1000);
+          console.log('💧 Timeout Humidificador - desbloqueando control');
+        }, 3000);
         break;
-        
+
       default:
-        console.warn(`Tipo de control no reconocido: ${type}`);
+        console.warn(`❌ Tipo de control no reconocido: ${type}`);
         break;
     }
   };
 
-  // Al cambiar de modo:
   const handleModeChange = (isAutomatic) => {
     setModoAutomatico(isAutomatic);
     localStorage.setItem("modoGecko", isAutomatic ? "auto" : "manual");
-    
+
     if (socket.current?.connected) {
       const mode = isAutomatic ? "automatico" : "manual";
-      console.log(`🔄 Cambiando modo a: ${mode.toUpperCase()}`);
+      console.log(`⚙️ Enviando cambio de modo: ${mode}`);
       socket.current.emit("modo", mode);
     }
-    
+
     showModeToast(isAutomatic, setShowToast, setToastMessage);
   };
 
+  // 🔧 FUNCIONES DE EVALUACIÓN MEJORADAS
   const evaluarEstadoTemperatura = () => {
     const tf = temperaturaFria.at(-1);
     const tc = temperaturaCaliente.at(-1);
-    
+
     if (!Number.isFinite(tf) || !Number.isFinite(tc)) {
       return 'sinDatos';
     }
-    
+
     const frioEval = evaluarParametro(tf, LIMITES.temperaturaFria);
     const calienteEval = evaluarParametro(tc, LIMITES.temperaturaCaliente);
-    
+
     if (frioEval.estado === "critico" || calienteEval.estado === "critico") {
       return 'critico';
     } else if (frioEval.estado === "revisar" || calienteEval.estado === "revisar") {
@@ -548,16 +585,17 @@ socket.current.on("actuador-data", (data) => {
 
   const evaluarEstadoHumedad = () => {
     const humedadActual = humedad.at(-1);
-    
+
     if (!Number.isFinite(humedadActual)) {
       return 'sinDatos';
     }
-    
+
     const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
     const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
-    
+
     return humedadEval.estado;
   };
+
   return (
     <PageContainer>
       <Header showUserIcon />
@@ -846,10 +884,6 @@ socket.current.on("actuador-data", (data) => {
       <DataValue>{temperaturaCaliente.at(-1) ? `${temperaturaCaliente.at(-1).toFixed(1)}°C` : '--'}</DataValue>
     </DataRow>
     <DataRow>
-      <DataLabel>CICLO:</DataLabel>
-      <DataValue>{cicloDia === "dia" ? 'DIURNO' : cicloDia === "noche" ? 'NOCTURNO' : 'AMANECER'}</DataValue>
-    </DataRow>
-    <DataRow>
       <DataLabel>STATUS:</DataLabel>
       <DataValue>
         {(() => {
@@ -929,10 +963,6 @@ socket.current.on("actuador-data", (data) => {
                   <DataValue>{enMuda ? 'SI' : 'NO'}</DataValue>
                 </DataRow>
                 <DataRow>
-                  <DataLabel>MODO:</DataLabel>
-                  <DataValue>{enMuda ? 'MUDA' : 'NORMAL'}</DataValue>
-                </DataRow>
-                <DataRow>
                   <DataLabel>STATUS:</DataLabel>
                   <DataValue>
                     {(() => {
@@ -1006,14 +1036,14 @@ socket.current.on("actuador-data", (data) => {
                 const maxVal = Math.max(...data);
                 const average = (minVal + maxVal) / 2;
                 
-                // Usar solo ±0.5 del promedio para hacerlo muy plano
+             
                 return Math.ceil(average + 0.5);
               },
-              // Ticks más pequeños para mayor precisión visual
+             
               ticks: {
-                stepSize: 0.2, // Incrementos muy pequeños
+                stepSize: 0.2, 
                 callback: function(value) {
-                  return Math.round(value * 10) / 10; // Mostrar hasta 1 decimal
+                  return Math.round(value * 10) / 10; 
                 }
               }
             },                       
@@ -1112,16 +1142,8 @@ socket.current.on("actuador-data", (data) => {
               <DataDisplayCard>
                 <DataDisplayTitle>🔆 UV</DataDisplayTitle>
                 <DataRow>
-                  <DataLabel>ÍNDICE UV:</DataLabel>
-                  <DataValue>{uviData.at(-1) ? `${uviData.at(-1).toFixed(1)} UVI` : '--'}</DataValue>
-                </DataRow>
-                <DataRow>
                   <DataLabel>FOCO UV:</DataLabel>
                   <DataValue>{controlUV ? 'ON' : 'OFF'}</DataValue>
-                </DataRow>
-                <DataRow>
-                  <DataLabel>CICLO:</DataLabel>
-                  <DataValue>{cicloDia === "dia" ? 'DIURNO' : cicloDia === "noche" ? 'NOCTURNO' : 'AMANECER'}</DataValue>
                 </DataRow>
                 <DataRow>
                   <DataLabel>STATUS:</DataLabel>
@@ -1326,17 +1348,19 @@ socket.current.on("actuador-data", (data) => {
       </AnimatePresence>
 
       {/* Información de Conexión - Fija en la parte inferior */}
-      <ConnectionInfo>
-        ⏱️ <strong>Tiempo Conectado:</strong> {elapsedTime} | 
-        📊 <strong>Datos Recibidos:</strong> {temperaturaFria.length + temperaturaCaliente.length + humedad.length + luminosidad.length + uviData.length} | 
-        🔄 <strong>Última Actualización:</strong> {new Date().toLocaleTimeString("es-MX", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-          timeZone: "America/Mexico_City",
-        })} |
-      </ConnectionInfo>
+<ConnectionInfo>
+  ⏱️ <strong>Sesión activa:</strong> {elapsedTime} |
+  🔄 <strong>Última actualización:</strong> {new Date().toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "America/Mexico_City",
+  })} |
+  🦎 <strong>Muda:</strong> {enMuda ? 'Sí' : 'No'} |
+   <strong>Modo:</strong> {modoAutomatico ? 'Automático' : 'Manual'} |
+</ConnectionInfo>
+
 
       <Footer />
     </PageContainer>

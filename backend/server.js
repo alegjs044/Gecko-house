@@ -5,6 +5,13 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { mqttClient, initMQTT } = require("./mqttClient");
 
+const DEBUG_MODE = process.env.DEBUG_MODE === "true";
+const log = {
+  info: (...args) => DEBUG_MODE && console.info("[INFO]", ...args),
+  warn: (...args) => console.warn("[WARN]", ...args),
+  error: (...args) => console.error("[ERROR]", ...args),
+};
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -14,7 +21,6 @@ const io = new Server(server, {
   },
 });
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -27,11 +33,12 @@ app.use("/api", require("./routes/historial"));
 app.use("/api/dev", require("./routes/dev"));
 app.use("/api", require("./routes/soporte"));
 
-// Iniciar MQTT
-initMQTT(io);
-
+// 🔧 MAPAS DE USUARIOS (deben estar ANTES de initMQTT)
 const socketToUserMap = new Map();
 const userToSocketMap = new Map();
+
+// 🔧 CORREGIDO: Pasar mapas de usuarios a initMQTT
+initMQTT(io, socketToUserMap, userToSocketMap);
 
 const sendToSpecificUser = (userId, eventName, data) => {
   const socketId = userToSocketMap.get(parseInt(userId));
@@ -39,20 +46,21 @@ const sendToSpecificUser = (userId, eventName, data) => {
     const socket = io.sockets.sockets.get(socketId);
     if (socket) {
       socket.emit(eventName, data);
-      console.log(`📤 Enviado '${eventName}' a usuario ${userId}:`, data);
+      log.info(`[SOCKET] Enviado '${eventName}' a usuario ${userId}`, data);
       return true;
     }
   }
-  console.log(`⚠️ Usuario ${userId} no encontrado o desconectado`);
+  log.warn(`[SOCKET] Usuario ${userId} no conectado o no encontrado`);
   return false;
 };
 
+// SERVIDOR - Eventos Socket.IO con aislamiento de usuarios
+
 io.on("connection", (socket) => {
   let id_usuario = socket.handshake.auth?.ID_usuario;
-  if (id_usuario && typeof id_usuario === 'string') {
-    id_usuario = parseInt(id_usuario);
-  }
-  console.log(`🟢 Cliente conectado | Socket ID: ${socket.id} | Usuario: ${id_usuario || 'Desconocido'}`);
+  if (id_usuario && typeof id_usuario === "string") id_usuario = parseInt(id_usuario);
+
+  log.info(`[SOCKET] Conectado: ${socket.id} | Usuario: ${id_usuario || "Desconocido"}`);
 
   if (id_usuario && !isNaN(id_usuario)) {
     if (userToSocketMap.has(id_usuario)) {
@@ -61,11 +69,11 @@ io.on("connection", (socket) => {
     }
     socketToUserMap.set(socket.id, id_usuario);
     userToSocketMap.set(id_usuario, socket.id);
-    socket.emit('user-confirmed', {
-      message: 'Usuario identificado correctamente',
+    socket.emit("user-confirmed", {
+      message: "Usuario identificado correctamente",
       ID_usuario: id_usuario,
       socketId: socket.id,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -73,45 +81,134 @@ io.on("connection", (socket) => {
   const userId = () => socketToUserMap.get(socket.id);
   const idMQTT = () => getMQTTUserId(userId());
 
-  socket.on("placa-termica", (payload) => {
-    const value = Math.max(0, Math.min(100, parseInt(payload.temperatura)));
+  // 🔧 PLACA TÉRMICA - CORREGIDO
+  socket.on("placa-termica", ({ temperatura }) => {
+    const value = Math.max(0, Math.min(100, parseInt(temperatura)));
     mqttClient.publish(`terrario/placaP/${idMQTT()}`, value.toString());
-    io.emit("actuador-data", { zona: "placaP", valor: value, ID_usuario: userId() });
+    
+    // ✅ CORREGIDO: Solo al usuario que envió el comando
+    socket.emit("actuador-data", { zona: "placaP", valor: value, ID_usuario: userId() });
+    
+    log.info(`[PLACA] Usuario ${userId()} ajustó placa térmica a ${value}%`);
   });
 
+  // MODO (AUTOMÁTICO/MANUAL)
   socket.on("modo", (valor) => {
-    const isManual = valor === "manual";
-    mqttClient.publish(`terrario/modo/${idMQTT()}`, isManual ? "1" : "0");
+    const modoValue = valor === "manual" ? "1" : "0";
+    mqttClient.publish(`terrario/modo/${idMQTT()}`, modoValue);
+    
+    // ✅ Emitir confirmación solo al usuario que cambió el modo
+    socket.emit("actuador-confirmado", { 
+      zona: "modo", 
+      valor: valor,
+      ID_usuario: userId(),
+      timestamp: new Date().toISOString()
+    });
+    
+    log.info(`[MODO] Usuario ${userId()} cambió a modo ${valor}`);
   });
 
-  socket.on("humidificador", (estado) => {
-    mqttClient.publish(`terrario/humidificadorP/${idMQTT()}`, estado ? "1" : "0");
-    io.emit("actuador-data", { zona: "humidificadorP", valor: estado, ID_usuario: userId() });
+  // CONTROL DE FOCO PRINCIPAL - YA ESTÁ CORRECTO
+  socket.on("control-foco", ({ encendido }) => {
+    const valor = encendido ? "1" : "0";
+    mqttClient.publish(`terrario/focoP/${idMQTT()}`, valor);
+    
+    // Emitir SOLO al usuario que hizo el cambio
+    socket.emit("actuador-confirmado", { 
+      zona: "focoP", 
+      valor: encendido ? 1 : 0, 
+      ID_usuario: userId(),
+      timestamp: new Date().toISOString()
+    });
+    
+    log.info(`[FOCO] Usuario ${userId()} ${encendido ? 'encendió' : 'apagó'} foco principal`);
   });
 
-  socket.on("control-foco", (estado) => {
-    mqttClient.publish(`terrario/focoP/${idMQTT()}`, estado ? "1" : "0");
-    io.emit("actuador-data", { zona: "focoP", valor: estado, ID_usuario: userId() });
+  // CONTROL DE LUZ UV - YA ESTÁ CORRECTO
+  socket.on("control-uv", ({ encendido }) => {
+    const valor = encendido ? "1" : "0";
+    mqttClient.publish(`terrario/focouviP/${idMQTT()}`, valor);
+    
+    // Emitir SOLO al usuario que hizo el cambio
+    socket.emit("actuador-confirmado", { 
+      zona: "focouviP", 
+      valor: encendido ? 1 : 0, 
+      ID_usuario: userId(),
+      timestamp: new Date().toISOString()
+    });
+    
+    log.info(`[UV] Usuario ${userId()} ${encendido ? 'encendió' : 'apagó'} luz UV`);
   });
 
-  socket.on("control-uv", (estado) => {
-    mqttClient.publish(`terrario/focouviP/${idMQTT()}`, estado ? "1" : "0");
-    io.emit("actuador-data", { zona: "focouviP", valor: estado, ID_usuario: userId() });
+  // CONTROL DE HUMIDIFICADOR - YA ESTÁ CORRECTO
+  socket.on("control-humidificador", ({ encendido }) => {
+    const valor = encendido ? "1" : "0";
+    mqttClient.publish(`terrario/humidificadorP/${idMQTT()}`, valor);
+    
+    // Emitir SOLO al usuario que hizo el cambio
+    socket.emit("actuador-confirmado", { 
+      zona: "humidificadorP", 
+      valor: encendido ? 1 : 0, 
+      ID_usuario: userId(),
+      timestamp: new Date().toISOString()
+    });
+    
+    log.info(`[HUMIDIFICADOR] Usuario ${userId()} ${encendido ? 'encendió' : 'apagó'} humidificador`);
+  });
+
+  // 🔧 EVENTOS ADICIONALES QUE PUEDEN SER NECESARIOS
+
+  // Solicitar estado actual del terrario
+  socket.on("solicitar-estado", () => {
+    const user_id = userId();
+    if (user_id) {
+      // Emitir solo al usuario que lo solicita
+      socket.emit("estado-solicitado", {
+        ID_usuario: user_id,
+        timestamp: new Date().toISOString(),
+        message: "Estado del terrario solicitado"
+      });
+      log.info(`[ESTADO] Usuario ${user_id} solicitó estado del terrario`);
+    }
+  });
+
+  // Heartbeat para mantener conexión activa
+  socket.on("heartbeat", () => {
+    socket.emit("heartbeat-response", {
+      ID_usuario: userId(),
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // Evento para recibir actividad del usuario
+  socket.on("user-activity", (data) => {
+    const user_id = userId();
+    if (user_id) {
+      log.info(`[ACTIVITY] Usuario ${user_id} reportó actividad:`, data);
+    }
   });
 
   socket.on("disconnect", () => {
     socketToUserMap.delete(socket.id);
     if (id_usuario) userToSocketMap.delete(id_usuario);
-    console.log("🔴 Cliente desconectado");
+    log.info(`[SOCKET] Desconectado: ${socket.id} | Usuario: ${id_usuario || "Desconocido"}`);
   });
 });
 
+// Funciones para broadcast (cuando sea necesario enviar a todos)
 const broadcastToAllUsers = (eventName, data) => {
   const connectedUsers = Array.from(userToSocketMap.keys());
-  connectedUsers.forEach(userId => {
-    sendToSpecificUser(userId, eventName, data);
-  });
+  connectedUsers.forEach(userId => sendToSpecificUser(userId, eventName, data));
   return connectedUsers.length;
+};
+
+// 🔧 FUNCIÓN PARA ENVIAR DATOS ESPECÍFICOS DEL USUARIO
+const sendUserSpecificData = (userId, eventName, data) => {
+  return sendToSpecificUser(userId, eventName, { 
+    ...data, 
+    ID_usuario: userId,
+    timestamp: new Date().toISOString()
+  });
 };
 
 const getServerStats = () => ({
@@ -119,51 +216,76 @@ const getServerStats = () => ({
   totalSockets: io.sockets.sockets.size,
   uptime: process.uptime(),
   memory: process.memoryUsage(),
-  timestamp: new Date().toISOString()
+  timestamp: new Date().toISOString(),
 });
 
+// APIs de estadísticas del servidor
 app.get("/api/server/stats", (req, res) => res.json(getServerStats()));
+
 app.get("/api/server/users", (req, res) => {
   const users = Array.from(userToSocketMap.keys());
-  res.json({ connectedUsers: users, count: users.length, timestamp: new Date().toISOString() });
+  res.json({ 
+    connectedUsers: users, 
+    count: users.length, 
+    timestamp: new Date().toISOString() 
+  });
 });
 
-process.on('uncaughtException', (error) => {
-  console.error('❌ Error no capturado:', error);
+// 🔧 API para enviar mensaje a usuario específico (útil para testing)
+app.post("/api/server/send/:userId", (req, res) => {
+  const { userId } = req.params;
+  const { event, data } = req.body;
+  
+  const sent = sendToSpecificUser(parseInt(userId), event || 'test-message', data);
+  
+  res.json({
+    success: sent,
+    userId: parseInt(userId),
+    message: sent ? 'Mensaje enviado' : 'Usuario no conectado',
+    timestamp: new Date().toISOString()
+  });
 });
 
-process.on('unhandledRejection', (reason) => {
-  console.error('❌ Promesa rechazada no manejada:', reason);
+// Manejo de errores del proceso
+process.on("uncaughtException", (error) => {
+  log.error("❌ Error no capturado:", error);
 });
 
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM recibido. Cerrando servidor...');
+process.on("unhandledRejection", (reason) => {
+  log.error("❌ Promesa rechazada no manejada:", reason);
+});
+
+process.on("SIGTERM", () => {
+  log.warn("🛑 SIGTERM recibido. Cerrando servidor...");
   server.close(() => process.exit(0));
 });
 
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT recibido. Cerrando servidor...');
+process.on("SIGINT", () => {
+  log.warn("🛑 SIGINT recibido. Cerrando servidor...");
   server.close(() => process.exit(0));
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 === SERVIDOR GECKOHOUSE INICIADO ===`);
-  console.log(`🌐 Servidor web: http://localhost:${PORT}`);
-  console.log(`📡 Socket.IO: Puerto ${PORT}`);
-  console.log(`🦎 Sistema: Listo para recibir datos de Arduino`);
-  console.log(`⏰ Iniciado: ${new Date().toLocaleString('es-ES')}`);
+  console.log(`🌐 Servidor iniciado: http://localhost:${PORT}`);
+  console.log(`📡 Socket.IO en puerto ${PORT}`);
+  console.log(`🦎 GeckoHouse listo para recibir datos`);
+  console.log(`⏰ Iniciado: ${new Date().toLocaleString("es-ES")}`);
+  console.log(`👥 Sistema de aislamiento de usuarios: ACTIVADO`);
+  
+  // Estadísticas cada 5 minutos
   setInterval(() => {
     const stats = getServerStats();
-    console.log(`📊 Estadísticas - Usuarios: ${stats.connectedUsers} | Uptime: ${Math.floor(stats.uptime)}s`);
+    console.log(`📊 Usuarios conectados: ${stats.connectedUsers} | Sockets: ${stats.totalSockets}`);
   }, 300000);
 });
 
 module.exports = {
   io,
   sendToSpecificUser,
+  sendUserSpecificData,
   broadcastToAllUsers,
   getServerStats,
   socketToUserMap,
-  userToSocketMap
+  userToSocketMap,
 };
