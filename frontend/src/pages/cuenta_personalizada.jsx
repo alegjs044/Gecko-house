@@ -67,7 +67,7 @@ const Personalizar = () => {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/auth/edit-user", {
+      const response = await fetch("http://localhost:5004/api/auth/edit-user", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

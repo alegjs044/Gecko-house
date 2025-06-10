@@ -17,7 +17,7 @@ const dbConfig = {
 
   // Opciones seguras y compatibles
   charset: "utf8mb4",
-  timezone: "Z",
+  timezone: "-06:00", // 🔧 CAMBIADO: Hora de México (UTC-6)
   dateStrings: true,
   multipleStatements: false,
 
@@ -35,6 +35,7 @@ console.log({
   password: dbConfig.password ? "***" : "(vacío)",
   database: dbConfig.database,
   port: dbConfig.port,
+  timezone: dbConfig.timezone, // 🔧 AGREGADO: Mostrar timezone configurado
 });
 
 // ✅ Crear pool de conexiones
@@ -79,8 +80,8 @@ const executeQuery = (query, params = []) => {
 // ✅ Prueba inicial de conexión
 const testConnection = async () => {
   try {
-    await executeQuery("SELECT 1");
-    console.log("✅ Conexión a base de datos exitosa");
+    await executeQuery("SELECT NOW() as hora_servidor, CONVERT_TZ(NOW(), '+00:00', '-06:00') as hora_mexico");
+    console.log("✅ Conexión a base de datos exitosa con timezone México");
   } catch (err) {
     console.error("❌ Fallo en conexión a base de datos:", err.message);
   }

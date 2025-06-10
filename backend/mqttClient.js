@@ -2,7 +2,6 @@ const mqtt = require("mqtt");
 const db = require("./db");
 const { procesarSensor, cambiarCiclo, cambiarMuda, obtenerEstado } = require("./registroCritico");
 const { procesarAlerta } = require("./Controllers/alertasNotificaciones");
-const Limites = require("./Const/Limites");
 
 const mqttClient = mqtt.connect("mqtts://d0e185c9110d4506b80ae6e164aaf93e.s1.eu.hivemq.cloud:8883", {
   username: process.env.MQTT_USER,
@@ -17,11 +16,11 @@ let usuariosActivos = new Set();
 let ultimaActividad = new Map();
 let ioReference = null;
 
-// CONFIGURACIÓN DE TIMEOUTS
+// 🔧 CONFIGURACIÓN CORREGIDA - CAMBIO MÍNIMO
 const CONFIG_USUARIOS = {
-  TIMEOUT_INACTIVIDAD: 600000,
-  INTERVALO_LIMPIEZA: 60000,
-  TIEMPO_GRACIA: 30000
+  TIMEOUT_INACTIVIDAD: 3600000, // 🔧 1 HORA (era 10 minutos)
+  INTERVALO_LIMPIEZA: 300000,   // 🔧 5 minutos (era 1 minuto)
+  TIEMPO_GRACIA: 120000         // 🔧 2 minutos (era 30 segundos)
 };
 
 const extraerIDUsuario = (topic) => {
@@ -140,81 +139,21 @@ const limpiarUsuariosInactivos = () => {
   }
 };
 
-// MAPEO DE TÓPICOS
-const MAPEO_TOPICOS = {
-  // === SENSORES ===
-  'zonafria': { tipo: 'temperatura', zona: 'fria', esSensor: true },
-  'zonacaliente': { tipo: 'temperatura', zona: 'caliente', esSensor: true },
-  'humedad': { tipo: 'humedad', zona: null, esSensor: true },
-  'luminosidad': { tipo: 'luminosidad', zona: null, esSensor: true },
-  'uvi': { tipo: 'luz_uv', zona: null, esSensor: true },
-
-  // === ESTADOS ===
-  'muda': { tipo: 'estado', subtipo: 'muda', esSensor: false },
-  'ciclo': { tipo: 'estado', subtipo: 'ciclo', esSensor: false },
-
-  // === ACTUADORES (no procesar como sensores) ===
-  'placaP': { tipo: 'actuador', dispositivo: 'placa', esSensor: false },
-  'humidificadorP': { tipo: 'actuador', dispositivo: 'humidificador', esSensor: false },
-  'focoP': { tipo: 'actuador', dispositivo: 'foco', esSensor: false },
-  'focouviP': { tipo: 'actuador', dispositivo: 'uv', esSensor: false },
-  'modo': { tipo: 'actuador', dispositivo: 'modo', esSensor: false },
-
-  // === ALIAS PARA RETROCOMPATIBILIDAD ===
-  'foco': { tipo: 'actuador', dispositivo: 'foco', esSensor: false },
-  'focouvi': { tipo: 'actuador', dispositivo: 'uv', esSensor: false },
-  'humidificador': { tipo: 'actuador', dispositivo: 'humidificador', esSensor: false },
-  'control': { tipo: 'actuador', dispositivo: 'general', esSensor: false }
-};
-
-const insertarEnBaseDatos = async (tipo, medicion, ID_usuario, zona = null, ciclo = null, estadoMuda = null) => {
-  try {
-    if (!esUsuarioActivo(ID_usuario)) {
-      return false;
-    }
-
-    const timestamp = new Date();
-
-    switch (tipo) {
-      case 'temperatura':
-        const queryTemp = `
-          INSERT INTO temperatura (ID_usuario, Medicion, Marca_tiempo, Zona, Ciclo, es_critico) 
-          VALUES (?, ?, ?, ?, ?, 0)
-        `;
-        await db.promise().query(queryTemp, [ID_usuario, medicion, timestamp, zona, ciclo]);
-        break;
-
-      case 'humedad':
-        const queryHum = `
-          INSERT INTO humedad (ID_usuario, Medicion, Marca_tiempo, estado_muda, Ciclo, es_critico) 
-          VALUES (?, ?, ?, ?, ?, 0)
-        `;
-        await db.promise().query(queryHum, [ID_usuario, medicion, timestamp, estadoMuda ? 1 : 0, ciclo]);
-        break;
-
-      case 'luz_uv':
-        const queryUV = `
-          INSERT INTO luz_uv (ID_usuario, Medicion, Marca_tiempo, Ciclo, es_critico) 
-          VALUES (?, ?, ?, ?, 0)
-        `;
-        await db.promise().query(queryUV, [ID_usuario, medicion, timestamp, ciclo]);
-        break;
-
-      default:
-        return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error(`❌ Error insertando ${tipo} para usuario ${ID_usuario}:`, error.message);
-    return false;
-  }
-};
-
-const shouldSave = (anterior, actual, limites, umbral = 0.5) => {
-  if (actual > limites.alto || actual < limites.bajo) return true;
-  if (anterior === null) return true;
-  return Math.abs(actual - anterior) >= umbral;
+// 🔧 AGREGADO: Función de logs mejorada de tu código original
+const logSensorData = (topic, valor, ID_usuario) => {
+  const timestamp = new Date().toLocaleTimeString();
+  const sensorData = {
+    "zonafria": `[${timestamp}] 🌡️❄️ Zona fría: ${valor}°C (Usuario ${ID_usuario})`,
+    "zonacaliente": `[${timestamp}] 🌡️🔥 Zona caliente: ${valor}°C (Usuario ${ID_usuario})`,
+    "humedad": `[${timestamp}] 💧 Humedad: ${valor}% (Usuario ${ID_usuario})`,
+    "muda": `[${timestamp}] 🦎 Muda: ${valor} (Usuario ${ID_usuario})`,
+    "uvi": `[${timestamp}] ☀️ UV: ${valor} (Usuario ${ID_usuario})`,
+    "luminosidad": `[${timestamp}] 💡 Luz: ${valor}% (Usuario ${ID_usuario})`,
+    "ciclo": `[${timestamp}] 🔄 Ciclo: ${valor} (Usuario ${ID_usuario})`,
+  };
+  
+  const zona = topic.split("/")[1];
+  console.log(sensorData[zona] || `[${timestamp}] ${topic}: ${valor} (Usuario ${ID_usuario})`);
 };
 
 mqttClient.on("connect", () => {
@@ -234,12 +173,12 @@ mqttClient.on("reconnect", () => {
   console.log("🔄 Reconectando MQTT...");
 });
 
+// 🔧 FUNCIÓN MEJORADA: Integra tu lógica que funciona con múltiples usuarios
 const handleMessage = async (topic, message, io) => {
   try {
     const valorStr = message.toString().trim();
-    const valor = parseFloat(valorStr);
-
     const topicParts = topic.split("/");
+    
     if (topicParts.length !== 3 || topicParts[0] !== "terrario") {
       return;
     }
@@ -251,151 +190,93 @@ const handleMessage = async (topic, message, io) => {
     if (!ID_usuario) {
       return;
     }
-    const mapeo = MAPEO_TOPICOS[zona];
-    if (!mapeo) {
+
+    // 🔧 Auto-reactivar usuario cuando llegan datos
+    if (!esUsuarioActivo(ID_usuario)) {
+      registrarActividadUsuario(ID_usuario, 'sensor-data');
+    }
+
+    // 🔧 INTEGRADO: Lógica de tu código original para diferentes tipos de datos
+    
+    // === CASO 1: Cambio de ciclo ===
+    if (zona === "ciclo") {
+      const nuevoCiclo = valorStr.toLowerCase().trim();
+      logSensorData(topic, nuevoCiclo, ID_usuario);
+      
+      // Actualizar estado por usuario
+      cicloActual[ID_usuario] = nuevoCiclo;
+      
+      if (cambiarCiclo(nuevoCiclo)) {
+        emitirSoloAUsuario(ID_usuario, "ciclo-actualizado", {
+          ciclo: nuevoCiclo,
+          timestamp: timestamp,
+          ID_usuario
+        });
+      }
       return;
     }
-    if (mapeo.esSensor && !esUsuarioActivo(ID_usuario)) {
+    
+    // === CASO 2: Estado de muda ===
+    if (zona === "muda") {
+      const estado = parseInt(valorStr);
+      if (isNaN(estado) || (estado !== 0 && estado !== 1)) {
+        console.error(`❌ Estado muda inválido para usuario ${ID_usuario}: "${valorStr}"`);
+        return;
+      }
+      
+      logSensorData(topic, estado, ID_usuario);
+      
+      // Actualizar estado por usuario
+      estadoMuda[ID_usuario] = estado === 1;
+      
+      if (cambiarMuda(estado === 1)) {
+        emitirSoloAUsuario(ID_usuario, "muda-actualizada", {
+          estado_muda: estado,
+          timestamp: timestamp,
+          ID_usuario
+        });
+      }
       return;
     }
-    if (mapeo.tipo === 'estado') {
-      await procesarEstado(mapeo.subtipo, valorStr, ID_usuario, io, timestamp);
-    } else if (mapeo.tipo === 'actuador') {
-      await procesarActuador(mapeo.dispositivo, valorStr, ID_usuario, io, timestamp);
-    } else if (mapeo.esSensor) {
-      await procesarSensorDatos(mapeo, valor, valorStr, ID_usuario, zona, io, timestamp);
+    
+    // === CASO 3: Sensores (temperatura, humedad, UV, luminosidad) ===
+    let valor;
+    
+    // 🔧 INTEGRADO: Manejo especial de UV de tu código
+    if (zona === "uvi") {
+      if (valorStr.toLowerCase() === "encendido") {
+        valor = 1;
+      } else if (valorStr.toLowerCase() === "apagado") {
+        valor = 0;
+      } else {
+        valor = parseFloat(valorStr);
+      }
+    } else {
+      valor = parseFloat(valorStr);
     }
+    
+    // Validar que sea numérico
+    if (isNaN(valor)) {
+      console.error(`❌ Valor no numérico en ${topic}: "${valorStr}"`);
+      return;
+    }
+    
+    logSensorData(topic, valor, ID_usuario);
+    
+    // 🔧 INTEGRADO: Procesar con la lógica centralizada de tu registroCritico.js
+    await procesarSensor(topic, valor, io);
+    
+    // 🔧 INTEGRADO: Notificar al frontend (TODOS los valores, críticos y normales)
+    emitirSoloAUsuario(ID_usuario, "sensor-data", {
+      topic,
+      valor,
+      timestamp: timestamp,
+      zona,
+      ID_usuario
+    });
 
   } catch (error) {
     console.error("❌ Error en handleMessage:", error);
-  }
-};
-
-const procesarEstado = async (subtipo, valorStr, ID_usuario, io, timestamp) => {
-  switch (subtipo) {
-    case 'muda':
-      const enMuda = valorStr === "1" || valorStr.toLowerCase() === "true";
-      estadoMuda[ID_usuario] = enMuda;
-      cambiarMuda(enMuda);
-
-      // 🔧 CORREGIDO: Solo emitir al usuario específico
-      emitirSoloAUsuario(ID_usuario, "sensor-data", {
-        topic: `terrario/muda/User${ID_usuario}`,
-        zona: "muda",
-        valor: enMuda ? 1 : 0,
-        timestamp,
-        ID_usuario
-      });
-      break;
-
-    case 'ciclo':
-      const nuevoCiclo = valorStr.toLowerCase().trim();
-      cicloActual[ID_usuario] = nuevoCiclo;
-      cambiarCiclo(nuevoCiclo);
-
-      // 🔧 CORREGIDO: Solo emitir al usuario específico
-      emitirSoloAUsuario(ID_usuario, "sensor-data", {
-        topic: `terrario/ciclo/User${ID_usuario}`,
-        zona: "ciclo",
-        valor: nuevoCiclo,
-        timestamp,
-        ID_usuario
-      });
-      break;
-  }
-};
-
-const procesarActuador = async (dispositivo, valorStr, ID_usuario, io, timestamp) => {
-  const valor = valorStr.toLowerCase();
-  let mensaje = "";
-
-  switch (dispositivo) {
-    case 'placa':
-      mensaje = `🔥 Placa térmica cambiada a ${valorStr} para usuario ${ID_usuario}`;
-      break;
-    case 'humidificador':
-      mensaje = `💧 Humidificador cambiado a ${valorStr} para usuario ${ID_usuario}`;
-      break;
-    case 'foco':
-      mensaje = `💡 Foco cambiado a ${valorStr} para usuario ${ID_usuario}`;
-      break;
-    case 'uv':
-      mensaje = `🔆 Foco UV cambiado a ${valorStr} para usuario ${ID_usuario}`;
-      break;
-    case 'modo':
-      mensaje = valor === '1' || valor === 'manual'
-        ? `🔧 Usuario ${ID_usuario} cambió a modo MANUAL`
-        : `⚙️ Usuario ${ID_usuario} cambió a modo AUTOMÁTICO`;
-      break;
-    default:
-      mensaje = `🎛️ Dispositivo ${dispositivo} cambiado a ${valorStr} para usuario ${ID_usuario}`;
-  }
-
-  console.log(mensaje);
-
-  // 🔧 CORREGIDO: Solo emitir al usuario específico
-  emitirSoloAUsuario(ID_usuario, "actuador-confirmado", {
-    dispositivo,
-    valor: valorStr,
-    ID_usuario,
-    timestamp
-  });
-};
-
-const procesarSensorDatos = async (mapeo, valor, valorStr, ID_usuario, zona, io, timestamp) => {
-  if (isNaN(valor)) {
-    return;
-  }
-
-  const { tipo, zona: zonaSensor } = mapeo;
-
-  const ciclo = cicloActual[ID_usuario] ||
-    (timestamp.getHours() >= 6 && timestamp.getHours() < 18 ? "dia" : "noche");
-  const muda = estadoMuda[ID_usuario] === true;
-
-  const guardado = await insertarEnBaseDatos(tipo, valor, ID_usuario, zonaSensor, ciclo, muda);
-
-  if (!guardado) {
-    return;
-  }
-
-  switch (tipo) {
-    case 'temperatura':
-      console.log(`🌡️ Temperatura ${zonaSensor} procesada para usuario activo ${ID_usuario}: ${valor}`);
-      break;
-    case 'humedad':
-      console.log(`💧 Humedad procesada para usuario activo ${ID_usuario}: ${valor}`);
-      break;
-    case 'luminosidad':
-      console.log(`☀️ Luminosidad procesada para usuario activo ${ID_usuario}: ${valor}`);
-      break;
-    case 'luz_uv':
-      console.log(`🔆 UV procesado para usuario activo ${ID_usuario}: ${valor}`);
-      estadoUV = valor > 0;
-      break;
-  }
-
-  // 🔧 CORREGIDO: Solo emitir al usuario específico
-  emitirSoloAUsuario(ID_usuario, "sensor-data", {
-    topic: `terrario/${zona}/User${ID_usuario}`,
-    zona: tipo,
-    valor,
-    timestamp,
-    ID_usuario
-  });
-
-  try {
-    await procesarSensor(`terrario/${zona}/User${ID_usuario}`, valor, io);
-
-    const estado = obtenerEstado();
-    if (estado.inicializado && ["temperatura", "humedad"].includes(tipo)) {
-      const descripcion = `⚠️ Valor ${tipo} en ${zonaSensor || 'zona'}: ${valor}`;
-      const zonaLimite = tipo === 'temperatura' && zonaSensor ? `zona${zonaSensor}` : null;
-
-      await procesarAlerta(tipo, descripcion, valor, ciclo, muda, zonaLimite);
-    }
-  } catch (error) {
-    console.error(`❌ Error procesando alertas para usuario ${ID_usuario}:`, error.message);
   }
 };
 

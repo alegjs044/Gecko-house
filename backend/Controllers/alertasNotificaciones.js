@@ -13,7 +13,7 @@ const axios = require("axios");
 
 const procesarAlerta = async (tipo, descripcion, valor, ciclo, muda, zonaSensor) => {
   try {
-    await axios.post("http://localhost:5000/api/email/send-email", {
+    await axios.post("http://localhost:5004/api/email/send-email", {
       tipo,
       descripcion,
       valor,

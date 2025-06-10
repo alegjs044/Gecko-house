@@ -29,7 +29,7 @@ const RecoverPassword = () => {
     setMsg("");
 
     try {
-      const response = await axios.post("http://localhost:5000/api/recover-password", { email });
+      const response = await axios.post("http://localhost:5004/api/recover-password", { email });
       setMsg(response.data.msg);
       setSuccess(true);
       setEmail("");

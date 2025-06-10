@@ -19,8 +19,50 @@ import {
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const ITEMS_PER_PAGE = 10;
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:5004/api";
 const AUTO_REFRESH_INTERVAL = 30000;
+
+// ============================================
+// COMPONENTE MODAL DE BÚSQUEDA
+// ============================================
+const SearchModal = ({ show, onClose, searchTerm, resultsCount }) => {
+  if (!show) return null;
+  
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex',
+      justifyContent: 'center', alignItems: 'center', zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'white', padding: '30px', borderRadius: '10px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)', maxWidth: '400px',
+        width: '90%', textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '15px' }}>🔍</div>
+        <h2 style={{ color: '#2ecc71', marginBottom: '15px', fontSize: '24px' }}>
+          ¡Búsqueda Exitosa!
+        </h2>
+        <p style={{ marginBottom: '10px', fontSize: '16px', color: '#555' }}>
+          Término buscado: <strong>"{searchTerm}"</strong>
+        </p>
+        <p style={{ marginBottom: '25px', fontSize: '16px', color: '#555' }}>
+          Se encontraron <strong>{resultsCount}</strong> registro(s) que coinciden.
+        </p>
+        <button
+          onClick={onClose}
+          style={{
+            backgroundColor: '#3498db', color: 'white', border: 'none',
+            padding: '10px 20px', borderRadius: '5px', fontSize: '16px',
+            cursor: 'pointer', transition: 'background-color 0.3s'
+          }}
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const getUserData = () => {
   try {
@@ -44,14 +86,15 @@ const formatTime = (dateTime) => {
 
 const formatDateTime = (dateTime) => `${formatDate(dateTime)} ${formatTime(dateTime)}`;
 
+// 🔧 CAMBIADO: Sin redondeo, mostrando 2 decimales
 const formatValue = (value, category) => {
   if (value === null || value === undefined) return "--";
-  const roundedValue = Math.round(value);
+  const preciseValue = parseFloat(value).toFixed(2); // 🔧 2 decimales en lugar de redondeo
   return {
-    temperatura: `${roundedValue}°C`,
-    humedad: `${roundedValue}%`,
-    luz_uv: roundedValue
-  }[category] || roundedValue;
+    temperatura: `${preciseValue}°C`,
+    humedad: `${preciseValue}%`,
+    luz_uv: preciseValue
+  }[category] || preciseValue;
 };
 
 const getCycleText = (ciclo) => ({ 
@@ -100,14 +143,14 @@ const getFixedYAxisRange = (category, filterZone = null) => {
   return { min: undefined, max: undefined };
 };
 
-// Suavizado para líneas más rectas - mantiene valor anterior si diferencia < umbral
+// 🔧 CAMBIADO: Suavizado sin redondeo, mantiene precisión
 const smoothForStraightLines = (data, threshold = 0.8) => {
   if (data.length <= 2) return data;
   
-  const smoothed = [Math.round(data[0])];
+  const smoothed = [parseFloat(data[0])]; // 🔧 Sin redondeo
   
   for (let i = 1; i < data.length; i++) {
-    const current = Math.round(data[i]);
+    const current = parseFloat(data[i]); // 🔧 Sin redondeo
     const previous = smoothed[smoothed.length - 1];
     
     if (Math.abs(current - previous) < threshold) {
@@ -128,7 +171,11 @@ const Historial = () => {
   const [cicloActual, setCicloActual] = useState('');
   const [estadoMudaActual, setEstadoMudaActual] = useState(null);
   
-  const [search, setSearch] = useState("");
+  // 🔧 NUEVO: Estados de búsqueda
+  const [searchInput, setSearchInput] = useState("");
+  const [activeSearch, setActiveSearch] = useState("");
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  
   const [category, setCategory] = useState("temperatura");
   const [filterDate, setFilterDate] = useState("all");
   const [filterType, setFilterType] = useState("todos");
@@ -232,10 +279,31 @@ const Historial = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-    setSearch("");
+    setSearchInput("");
+    setActiveSearch("");
     setFilterZone("todas");
   }, [category]);
 
+  // 🔧 NUEVO: Función de búsqueda
+  const handleSearchClick = () => {
+    if (!searchInput.trim()) {
+      alert("Por favor ingresa un término de búsqueda");
+      return;
+    }
+    
+    setActiveSearch(searchInput.trim());
+    setCurrentPage(1);
+    setShowSearchModal(true);
+  };
+
+  // 🔧 NUEVO: Limpiar búsqueda
+  const clearSearch = () => {
+    setSearchInput("");
+    setActiveSearch("");
+    setCurrentPage(1);
+  };
+
+  // 🔧 CORREGIDO: Eliminación de registros con validación de usuario
   const deleteSelectedRecords = async () => {
     if (selectedItems.size === 0) return;
     if (!window.confirm(`¿Estás seguro de que deseas eliminar ${selectedItems.size} registro(s)?`)) return;
@@ -243,43 +311,122 @@ const Historial = () => {
     setDeleting(true);
     try {
       const userData = getUserData();
-      if (!userData?.ID_usuario) throw new Error('No hay datos de usuario');
+      const token = localStorage.getItem('token');
+      
+      if (!userData?.ID_usuario) {
+        alert('Error: No se encontraron datos del usuario. Inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
+      
+      if (!token) {
+        alert('Error: Token de sesión no encontrado. Inicia sesión nuevamente.');
+        navigate('/login');
+        return;
+      }
+      
+      console.log('Eliminando registros:', {
+        category,
+        ids: Array.from(selectedItems),
+        userId: userData.ID_usuario,
+        recordCount: selectedItems.size
+      });
+      
+      // Preparar el cuerpo de la petición con formato correcto
+      const requestBody = {
+        ID_usuario: parseInt(userData.ID_usuario), // Asegurar que sea número
+        ids: Array.from(selectedItems).map(id => parseInt(id)), // Asegurar que los IDs sean números
+        categoria: category // Incluir categoría por si el backend la necesita
+      };
+      
+      console.log('Request body:', requestBody);
       
       const response = await fetch(`${API_BASE_URL}/historial/${category}/registros`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ids: Array.from(selectedItems),
-          ID_usuario: userData.ID_usuario 
-        })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
       });
       
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      // Manejar respuesta del servidor
+      let responseData;
+      const contentType = response.headers.get('content-type');
       
-      const result = await response.json();
+      if (contentType && contentType.includes('application/json')) {
+        responseData = await response.json();
+      } else {
+        responseData = { message: await response.text() };
+      }
+      
+      console.log('Response status:', response.status);
+      console.log('Response data:', responseData);
+      
+      if (!response.ok) {
+        // Manejo específico de errores
+        if (response.status === 400) {
+          throw new Error(`Error de validación: ${responseData.error || responseData.message || 'Datos inválidos'}`);
+        } else if (response.status === 401) {
+          throw new Error('Sesión expirada. Inicia sesión nuevamente.');
+        } else if (response.status === 403) {
+          throw new Error('No tienes permisos para eliminar estos registros.');
+        } else if (response.status === 404) {
+          throw new Error('Los registros no fueron encontrados o ya fueron eliminados.');
+        } else {
+          throw new Error(`Error del servidor (${response.status}): ${responseData.error || responseData.message || 'Error desconocido'}`);
+        }
+      }
+      
+      // Éxito en la eliminación
+      const deletedCount = responseData.deletedCount || responseData.affected || selectedItems.size;
+      
       setSelectedItems(new Set());
-      alert(`${result.deletedCount} registro(s) eliminado(s) exitosamente.`);
+      alert(`${deletedCount} registro(s) eliminado(s) exitosamente.`);
+      console.log(`✅ Eliminación exitosa: ${deletedCount} registros`);
       
-      // Recargar datos sin reload completo
-      const historialRes = await fetch(`${API_BASE_URL}/historial/${category}?ID_usuario=${userData.ID_usuario}`);
-      if (historialRes.ok) {
-        const historialData = await historialRes.json();
-        setData(Array.isArray(historialData) ? historialData : []);
+      // Recargar datos después de eliminar
+      console.log('Recargando datos después de eliminación...');
+      const reloadUserData = getUserData();
+      if (reloadUserData?.ID_usuario) {
+        const historialRes = await fetch(`${API_BASE_URL}/historial/${category}?ID_usuario=${reloadUserData.ID_usuario}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (historialRes.ok) {
+          const historialData = await historialRes.json();
+          setData(Array.isArray(historialData) ? historialData : []);
+          console.log('✅ Datos recargados correctamente');
+        } else {
+          console.warn('⚠️ Error recargando datos:', historialRes.status);
+        }
       }
       
     } catch (error) {
-      console.error('Error eliminando registros:', error);
-      alert('Error al eliminar los registros. Inténtalo de nuevo.');
+      console.error('❌ Error eliminando registros:', error);
+      
+      // Manejo específico para errores de sesión
+      if (error.message.includes('Sesión expirada') || error.message.includes('Token')) {
+        alert('Tu sesión ha expirado. Serás redirigido al login.');
+        navigate('/login');
+        return;
+      }
+      
+      alert(`Error al eliminar los registros: ${error.message}`);
     } finally {
       setDeleting(false);
     }
   };
 
+  // 🔧 MODIFICADO: Aplicar filtros incluyendo búsqueda
   const applyFilters = (list) => {
     let filtered = list;
     
-    if (search) {
-      const searchLower = search.toLowerCase();
+    // 🔧 NUEVO: Filtro de búsqueda
+    if (activeSearch) {
+      const searchLower = activeSearch.toLowerCase();
       filtered = filtered.filter(item =>
         formatDate(item.marca_tiempo).toLowerCase().includes(searchLower) ||
         item.medicion.toString().toLowerCase().includes(searchLower) ||
@@ -360,6 +507,10 @@ const Historial = () => {
       if (category === "temperatura" && filterZone !== "todas") {
         title += ` - Zona ${getZoneText(filterZone)}`;
       }
+      // 🔧 NUEVO: Incluir término de búsqueda en PDF
+      if (activeSearch) {
+        title += ` - Búsqueda: "${activeSearch}"`;
+      }
       
       doc.setFontSize(16);
       doc.setFont(undefined, 'bold');
@@ -430,9 +581,14 @@ const Historial = () => {
       });
       
       const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = category === "temperatura" && filterZone !== "todas" 
+      let filename = category === "temperatura" && filterZone !== "todas" 
         ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.pdf`
         : `historial_${category}_${filterType}_${timestamp}.pdf`;
+      
+      // 🔧 NUEVO: Incluir búsqueda en nombre de archivo
+      if (activeSearch) {
+        filename = filename.replace('.pdf', `_busqueda_${timestamp}.pdf`);
+      }
       
       doc.save(filename);
       
@@ -484,9 +640,14 @@ const Historial = () => {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Historial");
       
       const timestamp = new Date().toISOString().slice(0, 10);
-      const filename = category === "temperatura" && filterZone !== "todas" 
+      let filename = category === "temperatura" && filterZone !== "todas" 
         ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.xlsx`
         : `historial_${category}_${filterType}_${timestamp}.xlsx`;
+      
+      // 🔧 NUEVO: Incluir búsqueda en nombre de archivo
+      if (activeSearch) {
+        filename = filename.replace('.xlsx', `_busqueda_${timestamp}.xlsx`);
+      }
       
       XLSX.writeFile(workbook, filename);
       
@@ -496,34 +657,35 @@ const Historial = () => {
     }
   };
 
+  // 🔧 CAMBIADO: getCurrentValue sin redondeo, con 2 decimales
   const getCurrentValue = () => {
     const chartData = getDataForChart();
     if (chartData.length === 0) return "--";
     
-if (category === "temperatura") {
+    if (category === "temperatura") {
       if (filterZone === "fria") {
         const fria = chartData.find(d => (d.zona === "fría" || d.zona === "fria") && d.medicion !== null && d.medicion !== undefined);
-        return fria ? `${Math.round(fria.medicion)}°C (Fría)` : "--";
+        return fria ? `${parseFloat(fria.medicion).toFixed(2)}°C (Fría)` : "--";
       } else if (filterZone === "caliente") {
         const caliente = chartData.find(d => d.zona === "caliente" && d.medicion !== null && d.medicion !== undefined);
-        return caliente ? `${Math.round(caliente.medicion)}°C (Caliente)` : "--";
+        return caliente ? `${parseFloat(caliente.medicion).toFixed(2)}°C (Caliente)` : "--";
       } else {
         const caliente = chartData.find(d => d.zona === "caliente" && d.medicion !== null && d.medicion !== undefined);
         const fria = chartData.find(d => (d.zona === "fría" || d.zona === "fria") && d.medicion !== null && d.medicion !== undefined);
-        if (caliente && fria) return `${Math.round(caliente.medicion)}°C | ${Math.round(fria.medicion)}°C`;
-        if (caliente) return `${Math.round(caliente.medicion)}°C (Caliente)`;
-        if (fria) return `${Math.round(fria.medicion)}°C (Fría)`;
+        if (caliente && fria) return `${parseFloat(caliente.medicion).toFixed(2)}°C | ${parseFloat(fria.medicion).toFixed(2)}°C`;
+        if (caliente) return `${parseFloat(caliente.medicion).toFixed(2)}°C (Caliente)`;
+        if (fria) return `${parseFloat(fria.medicion).toFixed(2)}°C (Fría)`;
         return "--";
       }
     } else if (category === "humedad") {
       const valor = chartData[0]?.medicion;
-      return (valor !== null && valor !== undefined) ? `${Math.round(valor)}%` : "--";
+      return (valor !== null && valor !== undefined) ? `${parseFloat(valor).toFixed(2)}%` : "--";
     } else if (category === "luz_uv") {
       const valor = chartData[0]?.medicion;
-      return (valor !== null && valor !== undefined) ? Math.round(valor) : "--";
+      return (valor !== null && valor !== undefined) ? parseFloat(valor).toFixed(2) : "--";
     }
     const valor = chartData[0]?.medicion;
-    return (valor !== null && valor !== undefined) ? Math.round(valor) : "--";
+    return (valor !== null && valor !== undefined) ? parseFloat(valor).toFixed(2) : "--";
   };
 
   const prepareChartData = (data, category) => {
@@ -650,6 +812,7 @@ if (category === "temperatura") {
     }
   };
 
+  // 🔧 CAMBIADO: Opciones del gráfico sin redondeo, mostrando 2 decimales
   const getChartOptions = (category, filterZone = null) => {
     const yAxisRange = getFixedYAxisRange(category, filterZone);
     
@@ -668,7 +831,8 @@ if (category === "temperatura") {
               if (label) label += ': ';
               
               if (context.parsed.y !== null) {
-                label += Math.round(context.parsed.y);
+                // 🔧 Sin redondeo, mostrando 2 decimales
+                label += parseFloat(context.parsed.y).toFixed(2);
                 if (category === 'temperatura') label += '°C';
                 else if (category === 'humedad') label += '%';
                 
@@ -702,7 +866,8 @@ if (category === "temperatura") {
           grid: { color: '#f0f0f0', drawBorder: true },
           ticks: {
             callback: function(value) {
-              return `${Math.round(value)}${category === 'temperatura' ? '°C' : category === 'humedad' ? '%' : ''}`;
+              // 🔧 Sin redondeo en los ticks del eje Y, mostrando 2 decimales
+              return `${parseFloat(value).toFixed(2)}${category === 'temperatura' ? '°C' : category === 'humedad' ? '%' : ''}`;
             },
             stepSize: category === "temperatura" ? 5 : category === "humedad" ? 10 : 0.5,
             font: { size: 11 }
@@ -740,6 +905,11 @@ if (category === "temperatura") {
       title += ` - Zona ${getZoneText(filterZone)}`;
     }
     title += ` - ${filterType}`;
+    
+    // 🔧 NUEVO: Incluir búsqueda en título del gráfico
+    if (activeSearch) {
+      title += ` - Búsqueda: "${activeSearch}"`;
+    }
     
     const chartData = getDataForChart();
     if (mostrarTodosEnGrafico) {
@@ -847,18 +1017,53 @@ if (category === "temperatura") {
             </CategorySelect>
           </SelectGroup>
 
-          <SearchInput
-            type="text"
-            placeholder="Buscar por fecha, valor, zona o ciclo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          {/* 🔧 NUEVO: Sistema de búsqueda */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1', maxWidth: '400px' }}>
+            <SearchInput
+              type="text"
+              placeholder="Buscar por fecha, valor, zona o ciclo..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearchClick()}
+              style={{ flex: '1' }}
+            />
+            <DownloadButton 
+              onClick={handleSearchClick}
+              style={{ minWidth: '100px', backgroundColor: '#3498db', color: 'white' }}
+            >
+              🔍 Buscar
+            </DownloadButton>
+            {activeSearch && (
+              <DownloadButton 
+                onClick={clearSearch}
+                style={{ minWidth: '80px', backgroundColor: '#e74c3c', color: 'white' }}
+              >
+                ✖️ Limpiar
+              </DownloadButton>
+            )}
+          </div>
           
           <ButtonsContainer>
             <DownloadButton onClick={downloadPDF}>📄 PDF</DownloadButton>
             <DownloadButton onClick={downloadExcel}>📊 Excel</DownloadButton>
           </ButtonsContainer>
         </ControlsRow>
+
+        {/* 🔧 NUEVO: Indicador de búsqueda activa */}
+        {activeSearch && (
+          <div style={{
+            backgroundColor: '#e8f4fd', border: '1px solid #bee5eb', borderRadius: '5px',
+            padding: '10px', marginBottom: '15px', display: 'flex',
+            alignItems: 'center', justifyContent: 'space-between'
+          }}>
+            <span>
+              🔍 <strong>Búsqueda activa:</strong> "{activeSearch}" 
+              <span style={{ marginLeft: '10px', color: '#666' }}>
+                ({filtered.length} resultado{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''})
+              </span>
+            </span>
+          </div>
+        )}
 
         {selectedItems.size > 0 && (
           <ActionButtonsContainer>
@@ -926,10 +1131,14 @@ if (category === "temperatura") {
                   })
                 ) : (
                   <tr>
-                    <Td colSpan={category === "temperatura" ? 5 : category === "humedad" ? 4 : 4} style={{ textAlign: "center", padding: "20px", fontStyle: "italic" }}>
-                      {filterType === "todos" 
-                        ? `Aún no hay registros de ${getCategoryTitle(category)}.`
-                        : `No hay registros ${filterType} de ${getCategoryTitle(category)} con los filtros aplicados.`
+                    <Td colSpan={category === "temperatura" ? 5 : category === "humedad" ? 4 : 4} 
+                        style={{ textAlign: "center", padding: "20px", fontStyle: "italic" }}>
+                      {/* 🔧 NUEVO: Mensaje personalizado para búsquedas */}
+                      {activeSearch 
+                        ? `No se encontraron registros de ${getCategoryTitle(category)} que coincidan con "${activeSearch}".`
+                        : filterType === "todos" 
+                          ? `Aún no hay registros de ${getCategoryTitle(category)}.`
+                          : `No hay registros ${filterType} de ${getCategoryTitle(category)} con los filtros aplicados.`
                       }
                     </Td>
                   </tr>
@@ -1025,6 +1234,15 @@ if (category === "temperatura") {
             </ChartContainer>
           </DataPanel>
         </ContentRow>
+
+        {/* 🔧 NUEVO: Modal de búsqueda */}
+        <SearchModal 
+          show={showSearchModal} 
+          onClose={() => setShowSearchModal(false)}
+          searchTerm={searchInput}
+          resultsCount={filtered.length}
+        />
+        
       </Container>
       <Footer />
     </PageContainer>

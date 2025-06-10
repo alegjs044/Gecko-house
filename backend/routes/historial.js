@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../db");
-const { obtenerEstado } = require("../registroCritico");
-const { Limites } = require("../Const/Limites");
+const { obtenerEstado, Limites } = require("../registroCritico");
 
 // Consultas SQL por tipo de sensor
 const CONSULTA_HISTORIAL_COMPLETO = {
@@ -188,7 +187,7 @@ router.get("/dashboard/:ID_usuario", async (req, res) => {
   }
 });
 
-// ✅ RUTA PARA LÍMITES (CORREGIDA)
+// ✅ RUTA PARA LÍMITES (CORREGIDA CON TU ESTRUCTURA QUE FUNCIONA)
 router.get("/limites", (req, res) => {
   try {
     const estado = obtenerEstado();
@@ -203,15 +202,16 @@ router.get("/limites", (req, res) => {
     const ciclo = estado.ciclo || 'dia';
     const muda = estado.muda !== null ? estado.muda : false;
 
+    // 🔧 CORREGIDO: Usar tu estructura de límites que funciona
     const limites = {
       ciclo,
       estado_muda: muda,
       temperatura: {
-        fria: Limites.zonafria[ciclo],
-        caliente: Limites.zonacaliente[ciclo],
+        fria: Limites.temperatura.fria[ciclo],
+        caliente: Limites.temperatura.caliente[ciclo],
       },
       humedad: muda ? Limites.humedad.muda : Limites.humedad.normal,
-      luz_uv: Limites.uvi[ciclo]
+      luz_uv: Limites.luz_uv[ciclo]
     };
 
     console.log('📊 Límites enviados:', limites);
@@ -220,16 +220,16 @@ router.get("/limites", (req, res) => {
   } catch (error) {
     console.error('❌ Error obteniendo límites:', error.message);
     
-    // Límites por defecto si hay error
+    // 🔧 CORREGIDO: Límites por defecto usando tu estructura
     res.json({
       ciclo: 'dia',
       estado_muda: false,
       temperatura: {
         fria: { min: 26, max: 28 },
-        caliente: { min: 30, max: 35 }
+        caliente: { min: 28, max: 34 }
       },
       humedad: { min: 30, max: 50 },
-      luz_uv: { min: 0, max: 1 }
+      luz_uv: { min: 0, max: 0 }
     });
   }
 });

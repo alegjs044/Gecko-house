@@ -268,7 +268,7 @@ const Dashboard = () => {
     localStorage.setItem("sessionStartTime", newStart.toString());
     setStartTime(newStart);
 
-   socket.current = io("http://localhost:5000", {
+   socket.current = io("http://localhost:5004", {
       auth: {
         ID_usuario: ID_usuario,
         token: token
@@ -423,7 +423,7 @@ const Dashboard = () => {
     });
 
     // 🔧 CARGAR DATOS INICIALES DE TEMPERATURA
-    fetch(`http://localhost:5000/api/historial/temperatura?ID_usuario=${ID_usuario}`)
+    fetch(`http://localhost:5004/api/historial/temperatura?ID_usuario=${ID_usuario}`)
       .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
       .then(data => {
         if (data.length > 0) {
@@ -440,7 +440,7 @@ const Dashboard = () => {
       });
 
     // 🔧 CARGAR DATOS INICIALES DE HUMEDAD
-    fetch(`http://localhost:5000/api/historial/humedad?ID_usuario=${ID_usuario}`)
+    fetch(`http://localhost:5004/api/historial/humedad?ID_usuario=${ID_usuario}`)
       .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
       .then(data => {
         if (data.length > 0) {

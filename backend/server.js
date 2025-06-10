@@ -265,7 +265,7 @@ process.on("SIGINT", () => {
   server.close(() => process.exit(0));
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5004;
 server.listen(PORT, () => {
   console.log(`🌐 Servidor iniciado: http://localhost:${PORT}`);
   console.log(`📡 Socket.IO en puerto ${PORT}`);
