@@ -36,7 +36,8 @@ import {
   NotificationIconContainer,
 } from "../styles/NavBarStyles";
 
-const socket = io("http://localhost:5003");
+// ✅ CORREGIDO: Puerto 5004 en lugar de 5003
+const socket = io("http://localhost:5004");
 
 const Header = ({ setHeaderHeight = () => {} }) => {
   const headerRef = useRef(null);
@@ -82,11 +83,32 @@ const Header = ({ setHeaderHeight = () => {} }) => {
     setIsAuthenticated(!!token);
   }, [token, setHeaderHeight]);
 
+  // Socket connection handlers
+  useEffect(() => {
+    socket.on('connect', () => {
+      console.log("✅ Socket conectado correctamente");
+    });
+    
+    socket.on('disconnect', () => {
+      console.log("❌ Socket desconectado");
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error("❌ Error de conexión socket:", error);
+    });
+    
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
+    };
+  }, []);
+
   useEffect(() => {
     if ("Notification" in window && Notification.permission !== "granted") {
       Notification.requestPermission().then((permiso) => {
         if (permiso === "granted") {
-          console.log(" Permiso de notificaciones concedido.");
+          console.log("✅ Permiso de notificaciones concedido.");
         }
       });
     }
@@ -100,9 +122,16 @@ const Header = ({ setHeaderHeight = () => {} }) => {
 
   // Escuchar eventos de alertas críticas
   useEffect(() => {
-    socket.on("alerta-valor-critico", (data) => {
-      // Solo procesar alertas si el usuario está autenticado
+    const handleCriticalAlert = (data) => {
       if (!currentUsername) return;
+      
+      if (!data.tipo_sensor || typeof data.valor === 'undefined') {
+        console.error("❌ Datos insuficientes en la alerta:", {
+          tipo_sensor: data.tipo_sensor,
+          valor: data.valor
+        });
+        return;
+      }
       
       // Obtener información según el tipo de sensor
       const getTipoDescriptivo = () => {
@@ -120,22 +149,22 @@ const Header = ({ setHeaderHeight = () => {} }) => {
       
       const getIcono = () => {
         if (data.tipo_sensor === 'temperatura') {
-          return data.valor > data.limites.max ? '🔥' : '❄️';
+          return data.limites && data.valor > data.limites.max ? '🔥' : '❄️';
         } else if (data.tipo_sensor === 'humedad') {
-          return data.valor > data.limites.max ? '💧' : '🏜️';
+          return data.limites && data.valor > data.limites.max ? '💧' : '🏜️';
         } else if (data.tipo_sensor === 'luz_uv') {
-          return data.valor > data.limites.max ? '☀️' : '🌑';
+          return data.limites && data.valor > data.limites.max ? '☀️' : '🌑';
         }
         return '⚠️';
       };
       
       const getColor = () => {
         if (data.tipo_sensor === 'temperatura') {
-          return data.valor > data.limites.max ? '#ff5252' : '#4fc3f7';
+          return data.limites && data.valor > data.limites.max ? '#ff5252' : '#4fc3f7';
         } else if (data.tipo_sensor === 'humedad') {
-          return data.valor > data.limites.max ? '#64b5f6' : '#ffa726';
+          return data.limites && data.valor > data.limites.max ? '#64b5f6' : '#ffa726';
         } else if (data.tipo_sensor === 'luz_uv') {
-          return data.valor > data.limites.max ? '#ffeb3b' : '#78909c';
+          return data.limites && data.valor > data.limites.max ? '#ffeb3b' : '#78909c';
         }
         return '#ff9800';
       };
@@ -143,17 +172,17 @@ const Header = ({ setHeaderHeight = () => {} }) => {
       const icono = getIcono();
       const color = getColor();
       
-      
       let descripcion = '';
       
+      // ✅ CORREGIDO: Manejo seguro de datos opcionales
       const cicloInfo = data.ciclo ? 
         `<span style="color: #9c27b0;"><strong>Ciclo:</strong> ${data.ciclo}</span>` : '';
         
-      
-      const mudaInfo = data.tipo_sensor === 'humedad' && data.estado_muda !== undefined ? 
+      const mudaInfo = data.tipo_sensor === 'humedad' && typeof data.estado_muda !== 'undefined' ? 
         ` • <span style="color: #8bc34a;"><strong>Estado:</strong> ${data.estado_muda === 1 ? 'En muda' : 'Normal'}</span>` : '';
       
-      if (data.valor < data.limites.min) {
+      // ✅ CORREGIDO: Manejo seguro de límites
+      if (data.limites && data.valor < data.limites.min) {
         descripcion = `
           <div style="color: ${color}; margin-bottom: 5px;">
             <span style="font-size: 16px;">${icono} <strong>${tipo}</strong> por debajo del límite</span>
@@ -166,7 +195,7 @@ const Header = ({ setHeaderHeight = () => {} }) => {
             ${cicloInfo}${mudaInfo}
           </div>
         `;
-      } else {
+      } else if (data.limites && data.valor > data.limites.max) {
         descripcion = `
           <div style="color: ${color}; margin-bottom: 5px;">
             <span style="font-size: 16px;">${icono} <strong>${tipo}</strong> por encima del límite</span>
@@ -179,6 +208,19 @@ const Header = ({ setHeaderHeight = () => {} }) => {
             ${cicloInfo}${mudaInfo}
           </div>
         `;
+      } else {
+        // Fallback si no hay límites
+        descripcion = `
+          <div style="color: ${color}; margin-bottom: 5px;">
+            <span style="font-size: 16px;">${icono} <strong>${tipo}</strong> valor crítico</span>
+          </div>
+          <div>
+            Valor actual: <strong>${data.valor}${data.tipo_sensor === 'temperatura' ? '°C' : data.tipo_sensor === 'humedad' ? '%' : ''}</strong>
+          </div>
+          <div style="margin-top: 5px; font-size: 0.9em; color: #757575;">
+            ${cicloInfo}${mudaInfo}
+          </div>
+        `;
       }
       
       // Crear objeto de notificación
@@ -186,8 +228,8 @@ const Header = ({ setHeaderHeight = () => {} }) => {
         tipo,
         descripcion,
         timestamp: new Date().toISOString(),
-        color: color, 
-        icono: icono  
+        color: color,
+        icono: icono
       };
       
       // Guardar y mostrar notificación para el usuario actual
@@ -195,12 +237,33 @@ const Header = ({ setHeaderHeight = () => {} }) => {
       setNotifications(prev => [alerta, ...prev]);
       
       // Texto plano para notificación push (sin HTML)
-      const textoPlano = `${icono} ${tipo} ${data.valor < data.limites.min ? 'por debajo del límite' : 'por encima del límite'}: ${data.valor}${data.tipo_sensor === 'temperatura' ? '°C' : data.tipo_sensor === 'humedad' ? '%' : ''}`;
+      const textoPlano = `${icono} ${tipo}: ${data.valor}${data.tipo_sensor === 'temperatura' ? '°C' : data.tipo_sensor === 'humedad' ? '%' : ''}`;
       showNotificacion(`🦎 ${tipo}`, textoPlano);
-    });
+    };
+
+    socket.on("alerta-valor-critico", handleCriticalAlert);
+    socket.on("valor-critico", handleCriticalAlert);
     
-    return () => socket.off("alerta-valor-critico");
+    return () => {
+      socket.off("alerta-valor-critico", handleCriticalAlert);
+      socket.off("valor-critico", handleCriticalAlert);
+    };
   }, [currentUsername]);
+
+  // 🧪 Función para probar notificaciones manualmente (temporal)
+  const testNotification = () => {
+    const testAlert = {
+      tipo: "Prueba",
+      descripcion: "Esta es una notificación de prueba",
+      timestamp: new Date().toISOString(),
+      color: '#00ff00',
+      icono: '🧪'
+    };
+    
+    saveLocalNotification(testAlert, currentUsername);
+    setNotifications(prev => [testAlert, ...prev]);
+    showNotificacion("🧪 Prueba", "Notificación de prueba");
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");

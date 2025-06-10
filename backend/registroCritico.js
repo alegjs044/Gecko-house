@@ -251,7 +251,7 @@ const evaluarValorCritico = (tipoSensor, valor, zona = null, ID_usuario) => {
     limites = LIMITES.temperatura[zona][estado.cicloActual];
   } 
   else if (tipoSensor === 'humedad') {
-    const estadoMuda = estado.estadoMuda === true ? 'muda' : 'normal';
+    const estadoMuda = estado.estadoMuda === 1 ? 'muda' : 'normal';
     limites = LIMITES.humedad[estadoMuda];
   }
   else if (tipoSensor === 'luz_uv') {
@@ -306,7 +306,7 @@ const registrarValorCriticoEnBD = async (tipoSensor, valor, zona = null, ID_usua
     query = `INSERT INTO humedad 
              (ID_usuario, Medicion, Marca_tiempo, es_critico, estado_muda, Ciclo) 
              VALUES (?, ?, ?, 1, ?, ?)`;
-    params = [ID_usuario, valor, timestamp, estado.estadoMuda ? 1 : 0, estado.cicloActual];
+    params = [ID_usuario, valor, timestamp, estado.estadoMuda, estado.cicloActual];
     
   } else if (tipoSensor === 'luz_uv') {
     tabla = 'luz_uv';
@@ -364,7 +364,7 @@ const registrarValorNormalEnBD = async (tipoSensor, valor, zona, metadata) => {
     query = `INSERT INTO humedad 
              (ID_usuario, Medicion, Marca_tiempo, es_critico, estado_muda, Ciclo) 
              VALUES (?, ?, ?, 0, ?, ?)`;
-    params = [metadata.ID_usuario, valor, metadata.timestamp, metadata.estado_muda ? 1 : 0, metadata.ciclo];
+    params = [metadata.ID_usuario, valor, metadata.timestamp, metadata.estado_muda, metadata.ciclo];
     
   } else if (tipoSensor === 'luz_uv') {
     tabla = 'luz_uv';
@@ -653,7 +653,7 @@ const procesarSensor = async (topic, valor, io) => {
         ultimosCriticos.luz_uv = valor;
       }
       
-      // ENVIAR NOTIFICACIÓN (reutilizando límites ya calculados)
+      // ENVIAR NOTIFICACIÓN WebSocket
       io.emit("alerta-valor-critico", {
         tipo_sensor: tipo,
         zona: zona,
@@ -667,7 +667,7 @@ const procesarSensor = async (topic, valor, io) => {
       
       console.log(`🔔 Notificación crítica enviada: ${tipo} ${zona || ''} = ${valor} (Usuario ${ID_usuario})`);
       
-      // NOTIFICAR al frontend vía WebSocket
+      // NOTIFICAR al frontend vía WebSocket (evento adicional)
       io.emit("valor-critico", {
         tipo,
         zona,
@@ -729,7 +729,7 @@ const cambiarCiclo = (nuevoCiclo) => {
 
 /**
  * Cambia el estado de muda del gecko para un usuario específico
- * @param {boolean} nuevoEstado - true (mudando) o false (normal)
+ * @param {number} nuevoEstado - 0 (normal) o 1 (mudando)
  * @param {number} ID_usuario - ID del usuario (opcional, si no se proporciona se aplica a todos)
  * @returns {boolean} true si el cambio fue exitoso
  */
@@ -741,9 +741,9 @@ const cambiarMuda = (nuevoEstado, ID_usuario = null) => {
     estado.estadoMuda = nuevoEstado;
     
     if (anterior === null) {
-      console.log(`🎯 MUDA INICIALIZADA para usuario ${ID_usuario}: ${nuevoEstado} (${nuevoEstado ? 'MUDANDO' : 'NORMAL'})`);
+      console.log(`🎯 MUDA INICIALIZADA para usuario ${ID_usuario}: ${nuevoEstado} (${nuevoEstado === 1 ? 'MUDANDO' : 'NORMAL'})`);
     } else {
-      console.log(`🦎 MUDA para usuario ${ID_usuario}: ${anterior} → ${nuevoEstado} (${nuevoEstado ? 'MUDANDO' : 'NORMAL'})`);
+      console.log(`🦎 MUDA para usuario ${ID_usuario}: ${anterior} → ${nuevoEstado} (${nuevoEstado === 1 ? 'MUDANDO' : 'NORMAL'})`);
     }
     
     verificarInicializacionCompleta(ID_usuario);
