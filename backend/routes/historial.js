@@ -187,7 +187,7 @@ router.get("/dashboard/:ID_usuario", async (req, res) => {
   }
 });
 
-// ✅ RUTA PARA LÍMITES (CORREGIDA CON TU ESTRUCTURA QUE FUNCIONA)
+
 router.get("/limites", (req, res) => {
   try {
     const estado = obtenerEstado();
@@ -202,7 +202,6 @@ router.get("/limites", (req, res) => {
     const ciclo = estado.ciclo || 'dia';
     const muda = estado.muda !== null ? estado.muda : false;
 
-    // 🔧 CORREGIDO: Usar tu estructura de límites que funciona
     const limites = {
       ciclo,
       estado_muda: muda,
@@ -220,7 +219,7 @@ router.get("/limites", (req, res) => {
   } catch (error) {
     console.error('❌ Error obteniendo límites:', error.message);
     
-    // 🔧 CORREGIDO: Límites por defecto usando tu estructura
+
     res.json({
       ciclo: 'dia',
       estado_muda: false,
