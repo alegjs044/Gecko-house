@@ -858,7 +858,7 @@ const ToastMessage = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: center; 
   text-align: center;      
   gap: 5px;
   width: 100%;
