@@ -250,21 +250,6 @@ const Header = ({ setHeaderHeight = () => {} }) => {
     };
   }, [currentUsername]);
 
-  // 🧪 Función para probar notificaciones manualmente (temporal)
-  const testNotification = () => {
-    const testAlert = {
-      tipo: "Prueba",
-      descripcion: "Esta es una notificación de prueba",
-      timestamp: new Date().toISOString(),
-      color: '#00ff00',
-      icono: '🧪'
-    };
-    
-    saveLocalNotification(testAlert, currentUsername);
-    setNotifications(prev => [testAlert, ...prev]);
-    showNotificacion("🧪 Prueba", "Notificación de prueba");
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("token");
     setIsAuthenticated(false);

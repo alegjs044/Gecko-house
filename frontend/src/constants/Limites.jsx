@@ -1,18 +1,23 @@
 export const LIMITES = {
-  zonafria: {
-    dia: { bajo: 26, alto: 28 },
-    noche: { bajo: 20, alto: 24 }
-  },
-  zonacaliente: {
-    dia: { bajo: 28, alto: 34 },
-    noche: { bajo: 25, alto: 28 }
+  temperatura: {
+    fria: {
+      dia:    { min: 26, max: 28 },
+      noche:  { min: 20, max: 24 },
+      diaam:  { min: 26, max: 28 }
+    },
+    caliente: {
+      dia:    { min: 28, max: 34 },
+      noche:  { min: 25, max: 28 },
+      diaam:  { min: 28, max: 34 }
+    }
   },
   humedad: {
-    normal: { bajo: 30, alto: 50 },
-    muda: { bajo: 50, alto: 70 }
+    normal: { min: 30, max: 50 },    // cuando NO está en muda
+    muda:   { min: 50, max: 70 }     // cuando SÍ está en muda
   },
-  uvi: {
-    dia: { bajo: 0.2, alto: 1.0 }, 
-    noche: { bajo: 0, alto: 0 }
+  luz_uv: {
+    dia:    { min: 0,   max: 0 },
+    noche:  { min: 0,   max: 0 },
+    diaam:  { min: 0.2, max: 1 }
   }
 };

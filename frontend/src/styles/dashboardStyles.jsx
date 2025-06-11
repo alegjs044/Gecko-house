@@ -25,6 +25,7 @@ const MainContainer = styled.div`
   }
 `;
 
+
 const TopCards = styled.div`
   margin-top: 70px;
   display: grid;
@@ -142,6 +143,7 @@ const StatusValue = styled.div`
 const StatusIcon = styled.img`
   width: 24px;
   height: 24px;
+  filter: drop-shadow(0 0 2px white);
   
   @media (max-width: 768px) {
     width: 20px;
@@ -856,8 +858,8 @@ const ToastMessage = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center; /* ✅ centra verticalmente si hay altura extra */
-  text-align: center;      /* ✅ centra el texto */
+  justify-content: center; 
+  text-align: center;      
   gap: 5px;
   width: 100%;
 `;

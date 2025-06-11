@@ -1,4 +1,3 @@
-// AL INICIO del archivo, antes de todo:
 require('dotenv').config({ path: '../.env' });
 const QRCode = require("qrcode"); 
 const { createCanvas, loadImage } = require("canvas");
@@ -19,7 +18,6 @@ const dbConfig = mysql.createConnection({
   ssl: { rejectUnauthorized: false }
 });
 
-// Agregar soporte para promises
 db.promise = () => {
   return {
     query: (sql, params) => {
@@ -36,19 +34,23 @@ db.promise = () => {
 const URL_BASE = "http://localhost:3000/login";
 const claveTemporal = "temporal123";
 
-// Generar usuario y correo temporales únicos
-const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-const usuarioTemporal = "user_temp_" + randomId;
-const correo = `temporal_${randomId}@gecko.com`;
-
 const generarQRConTexto = async () => {
   try {
+    // Obtener el siguiente ID disponible
+    const [rows] = await db.promise().query("SELECT MAX(ID_usuario) as maxId FROM users");
+    const siguienteId = (rows[0].maxId || 0) + 1;
+    
+    // Generar usuario y correo temporales únicos
+    const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const usuarioTemporal = "user_temp_" + randomId;
+    const correo = `temporal_${randomId}@gecko.com`;
+    
     const hash = await bcrypt.hash(claveTemporal, 10);
 
-    // Insertar usuario en la base de datos
+    // Insertar usuario en la base de datos con ID automático consecutivo
     await db.promise().query(
       "INSERT INTO users (ID_usuario, Usuario, Correo, Contrasena) VALUES (?, ?, ?, ?)",
-      [usuarioTemporal, usuarioTemporal, correo, hash]
+      [siguienteId, usuarioTemporal, correo, hash]
     );
 
     const urlLogin = `${URL_BASE}?usuario=${usuarioTemporal}&clave=${claveTemporal}`;
@@ -83,6 +85,7 @@ const generarQRConTexto = async () => {
     // Limpiar QR temporal
     fs.unlinkSync(tempQR);
 
+    console.log("ID asignado:", siguienteId);
     console.log("Usuario:", usuarioTemporal);
     console.log("Correo:", correo);
     console.log("Contrasena:", claveTemporal);

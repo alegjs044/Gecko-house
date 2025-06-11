@@ -173,104 +173,95 @@ mqttClient.on("reconnect", () => {
   console.log("🔄 Reconectando MQTT...");
 });
 
-// 🔧 FUNCIÓN MEJORADA: Integra tu lógica que funciona con múltiples usuarios
+
 const handleMessage = async (topic, message, io) => {
   try {
     const valorStr = message.toString().trim();
     const topicParts = topic.split("/");
-    
-    if (topicParts.length !== 3 || topicParts[0] !== "terrario") {
-      return;
-    }
+
+    if (topicParts.length !== 3 || topicParts[0] !== "terrario") return;
 
     const [_, zona, usuarioMQTT] = topicParts;
     const ID_usuario = extraerIDUsuario(topic);
     const timestamp = new Date();
 
-    if (!ID_usuario) {
-      return;
-    }
+    if (!ID_usuario) return;
 
-    // 🔧 Auto-reactivar usuario cuando llegan datos
     if (!esUsuarioActivo(ID_usuario)) {
       registrarActividadUsuario(ID_usuario, 'sensor-data');
     }
 
-    // 🔧 INTEGRADO: Lógica de tu código original para diferentes tipos de datos
-    
-    // === CASO 1: Cambio de ciclo ===
-    if (zona === "ciclo") {
-      const nuevoCiclo = valorStr.toLowerCase().trim();
-      logSensorData(topic, nuevoCiclo, ID_usuario);
-      
-      // Actualizar estado por usuario
-      cicloActual[ID_usuario] = nuevoCiclo;
-      
-      if (cambiarCiclo(nuevoCiclo)) {
-        emitirSoloAUsuario(ID_usuario, "ciclo-actualizado", {
-          ciclo: nuevoCiclo,
-          timestamp: timestamp,
-          ID_usuario
-        });
-      }
-      return;
-    }
-    
-    // === CASO 2: Estado de muda ===
+    // 🌗 CICLO
+if (zona === "ciclo") {
+  const nuevoCiclo = valorStr.toLowerCase();
+  logSensorData(topic, nuevoCiclo, ID_usuario);
+
+  cicloActual[ID_usuario] = nuevoCiclo;
+
+  console.log("📤 Enviando ciclo al frontend:", nuevoCiclo);
+
+  emitirSoloAUsuario(ID_usuario, "sensor-data", {
+    topic,
+    valor: nuevoCiclo,
+    timestamp,
+    zona,
+    ID_usuario
+  });
+
+  if (cambiarCiclo(nuevoCiclo)) {
+    console.log(`🔄 CICLO para usuario ${ID_usuario}: cambiado a ${nuevoCiclo}`);
+  } else {
+    console.log(`🔁 CICLO para usuario ${ID_usuario}: sin cambio (${nuevoCiclo})`);
+  }
+  return;
+}
+
+
+    // 🦎 MUDA
     if (zona === "muda") {
       const estado = parseInt(valorStr);
       if (isNaN(estado) || (estado !== 0 && estado !== 1)) {
         console.error(`❌ Estado muda inválido para usuario ${ID_usuario}: "${valorStr}"`);
         return;
       }
-      
+
       logSensorData(topic, estado, ID_usuario);
-      
-      // Actualizar estado por usuario
+
       estadoMuda[ID_usuario] = estado === 1;
-      
+
       if (cambiarMuda(estado === 1)) {
         emitirSoloAUsuario(ID_usuario, "muda-actualizada", {
           estado_muda: estado,
-          timestamp: timestamp,
+          timestamp,
           ID_usuario
         });
       }
       return;
     }
-    
-    // === CASO 3: Sensores (temperatura, humedad, UV, luminosidad) ===
+
+    // 📈 OTROS SENSORES
     let valor;
-    
-    // 🔧 INTEGRADO: Manejo especial de UV de tu código
     if (zona === "uvi") {
-      if (valorStr.toLowerCase() === "encendido") {
-        valor = 1;
-      } else if (valorStr.toLowerCase() === "apagado") {
-        valor = 0;
-      } else {
-        valor = parseFloat(valorStr);
-      }
+      if (valorStr.toLowerCase() === "encendido") valor = 1;
+      else if (valorStr.toLowerCase() === "apagado") valor = 0;
+      else valor = parseFloat(valorStr);
     } else {
       valor = parseFloat(valorStr);
     }
-    
-    // Validar que sea numérico
+
     if (isNaN(valor)) {
       console.error(`❌ Valor no numérico en ${topic}: "${valorStr}"`);
       return;
     }
-    
+
     logSensorData(topic, valor, ID_usuario);
-    
-    // 🔧 INTEGRADO: Procesar con la lógica centralizada de tu registroCritico.js
+
     await procesarSensor(topic, valor, io);
-    
-    // 🔧 INTEGRADO: Notificar al frontend (TODOS los valores, críticos y normales)
+
     emitirSoloAUsuario(ID_usuario, "sensor-data", {
       topic,
       valor,
-      timestamp: timestamp,
+      timestamp,
       zona,
       ID_usuario
     });
@@ -280,7 +271,8 @@ const handleMessage = async (topic, message, io) => {
   }
 };
 
-// 🔧 CORREGIDO: Recibir mapas de usuarios del server.js
+
+
 const initMQTT = (io, socketToUserMap = null, userToSocketMap = null) => {
   ioReference = io;
   ioReference.socketToUserMap = socketToUserMap;
