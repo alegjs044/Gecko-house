@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback} from "react";
 import { io } from "socket.io-client";
-import {  AnimatePresence , motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -41,6 +41,65 @@ ChartJS.register(
   Legend
 );
 
+const CACHE_KEYS = {
+  TEMP_FRIA: 'gecko_temp_fria_cache',
+  TEMP_CALIENTE: 'gecko_temp_caliente_cache', 
+  HUMEDAD: 'gecko_humedad_cache',
+  LUMINOSIDAD: 'gecko_luminosidad_cache',
+  UV: 'gecko_uv_cache',
+  ESTADOS: 'gecko_estados_cache',
+  CICLO: 'gecko_ciclo_cache',
+  MUDA: 'gecko_muda_cache',
+  TIMESTAMP: 'gecko_cache_timestamp'
+};
+
+// ✅ OPTIMIZACIÓN: Flag para debugging
+const DEBUG_MODE = false;
+
+// ✅ OPTIMIZACIÓN: Función de cache con debounce incorporado
+const saveToCache = (key, data) => {
+  try {
+    const now = Date.now();
+    const lastSave = parseInt(localStorage.getItem(`${key}_last_save`) || '0');
+    
+    // Solo guardar si han pasado al menos 2 segundos desde la última vez
+    if (now - lastSave > 2000) {
+      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(CACHE_KEYS.TIMESTAMP, now.toString());
+      localStorage.setItem(`${key}_last_save`, now.toString());
+      if (DEBUG_MODE) console.log(`💾 Cache guardado: ${key}`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Error guardando caché:', error);
+  }
+};
+
+const loadFromCache = (key, defaultValue = []) => {
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed) ? parsed : defaultValue;
+    }
+  } catch (error) {
+    console.warn('⚠️ Error cargando caché:', error);
+  }
+  return defaultValue;
+};
+
+const isCacheRecent = () => {
+  try {
+    const timestamp = localStorage.getItem(CACHE_KEYS.TIMESTAMP);
+    if (!timestamp) return false;
+    
+    const cacheAge = Date.now() - parseInt(timestamp);
+    const THIRTY_MINUTES = 30 * 60 * 1000;
+    return cacheAge < THIRTY_MINUTES;
+  } catch {
+    return false;
+  }
+};
+
 const evaluarParametro = (valor, limites, esTemperatura = false, zona = null) => {
   if (valor === null || valor === undefined || isNaN(valor)) {
     return { 
@@ -51,7 +110,6 @@ const evaluarParametro = (valor, limites, esTemperatura = false, zona = null) =>
     };
   }
 
-  // Para temperatura, verificar que tengamos límites específicos de zona
   if (esTemperatura && zona && limites[zona]) {
     const { min, max } = limites[zona];
     
@@ -78,6 +136,7 @@ const evaluarParametro = (valor, limites, esTemperatura = false, zona = null) =>
       };
     }
   }
+  
   if (limites && typeof limites === 'object') {
     let min, max;
     
@@ -148,9 +207,10 @@ const showModeToast = (isAutomatic, setShowToast, setToastMessage) => {
     setShowToast(false);
   }, 4000);
 };
+
 const getIconFromMessage = (msg) => msg.match(/^[^\s]+/)?.[0] || "ℹ️";
 
-
+// ✅ OPTIMIZACIÓN: Mensajes estáticos fuera del componente
 const mensajesInfo = [
   "💧 Humedad Normal:\n30–50%",
   "💧 Humedad en Muda:\n50–70%",
@@ -169,17 +229,16 @@ const getInfoBgColor = (mensaje) => {
   if (mensaje.includes("❄️")) return "linear-gradient(135deg,rgb(230, 236, 241),rgb(11, 83, 116))";
   if (mensaje.includes("🌗") || mensaje.includes("🌞")) return "linear-gradient(135deg, #ff9800, #fb8c00)";
   if (mensaje.includes("🔆")) return "linear-gradient(135deg, #ab47bc, #8e24aa)";
-  return "linear-gradient(135deg, #607d8b, #90a4ae)"; // Default
+  return "linear-gradient(135deg, #607d8b, #90a4ae)";
 };
 
-
 const Dashboard = () => {
-  const [temperaturaFria, setTemperaturaFria] = useState([]);
-  const [temperaturaCaliente, setTemperaturaCaliente] = useState([]);
-  const [humedad, setHumedad] = useState([]);
-  const [luminosidad, setLuminosidad] = useState([]);
-  const [uviData, setUVIData] = useState([]);
-  const [uvi, setLuzUV] = useState(false);
+  const [temperaturaFria, setTemperaturaFria] = useState(() => loadFromCache(CACHE_KEYS.TEMP_FRIA));
+  const [temperaturaCaliente, setTemperaturaCaliente] = useState(() => loadFromCache(CACHE_KEYS.TEMP_CALIENTE));
+  const [humedad, setHumedad] = useState(() => loadFromCache(CACHE_KEYS.HUMEDAD));
+  const [luminosidad, setLuminosidad] = useState(() => loadFromCache(CACHE_KEYS.LUMINOSIDAD));
+  const [uviData, setUVIData] = useState(() => loadFromCache(CACHE_KEYS.UV));
+  const [, setLuzUV] = useState(false);
   const [cicloDia, setCicloDia] = useState("dia");
   const [bloqueoFoco, setBloqueoFoco] = useState(false);
   const [bloqueoUV, setBloqueoUV] = useState(false);
@@ -194,18 +253,158 @@ const Dashboard = () => {
   const [toastMessage, setToastMessage] = useState({ isAuto: true, title: "", subtitle: "" });
   const [socketConnected, setSocketConnected] = useState(false);
   const [mensajeActual, setMensajeActual] = useState(mensajesInfo[0]);
+  const [datosListos, setDatosListos] = useState(isCacheRecent());
 
-
-    const [startTime, setStartTime] = useState(() => {
-    const saved = localStorage.getItem("sessionStartTime");
-    return saved ? parseInt(saved) : Date.now();
-  });
-  const [elapsedTime, setElapsedTime] = useState("0s");
-
-  const navigate = useNavigate();
+  // ✅ OPTIMIZACIÓN: useRef para datos que no necesitan re-renders
   const socket = useRef(null);
+  const lastCacheSave = useRef(0);
+  const modoAutomaticoRef = useRef(modoAutomatico);
 
- useEffect(() => {
+  // ✅ OPTIMIZACIÓN: Actualizar ref cuando cambie el estado
+  useEffect(() => {
+    modoAutomaticoRef.current = modoAutomatico;
+  }, [modoAutomatico]);
+
+
+  const mensajesTemperatura = useMemo(() => [
+    {
+      zona: "fria",
+      label: "Zona Fría",
+      getValor: temperaturaFria,
+      icon: "❄️",
+    },
+    {
+      zona: "caliente",
+      label: "Zona Caliente",
+      getValor: temperaturaCaliente,
+      icon: "🔥",
+    },
+  ], [temperaturaFria, temperaturaCaliente]); // ✅ SÍ dependen de los arrays para actualizar
+
+  const [mensajeTemp, setMensajeTemp] = useState(mensajesTemperatura[0]);
+
+  // ✅ CORRECCIÓN: useEffect que SÍ se actualice cuando cambien los datos
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      setMensajeTemp((prev) => {
+        const index = mensajesTemperatura.indexOf(prev);
+        return mensajesTemperatura[(index + 1) % mensajesTemperatura.length];
+      });
+    }, 6000);
+    return () => clearInterval(intervalo);
+  }, [mensajesTemperatura]); // ✅ SÍ necesita dependencias para datos actualizados
+
+  // ✅ OPTIMIZACIÓN: Cache con debounce usando useRef
+  const debouncedSaveToCache = useCallback((key, data) => {
+    const now = Date.now();
+    if (now - lastCacheSave.current > 2000) {
+      saveToCache(key, data);
+      lastCacheSave.current = now;
+    }
+  }, []);
+
+
+  useEffect(() => {
+    const estados = {
+      cicloDia,
+      enMuda,
+      placaTermica,
+      humidificador,
+      controlUV,
+      controlFoco,
+      modoAutomatico
+    };
+    debouncedSaveToCache(CACHE_KEYS.ESTADOS, estados);
+  }, [cicloDia, enMuda, placaTermica, humidificador, controlUV, controlFoco, modoAutomatico, debouncedSaveToCache]);
+
+  // ✅ CORRECCIÓN: Chart data que SÍ se actualice con nuevos datos
+  const temperaturaChartData = useMemo(() => ({
+    labels: temperaturaFria.slice(-15).map((_, i) => {
+      const now = new Date();
+      const ts = new Date(now.getTime() - (temperaturaFria.slice(-15).length - i - 1) * 10000);
+      return ts.toLocaleTimeString("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/Mexico_City",
+      });
+    }),
+    datasets: [
+      {
+        label: "Zona Fría (°C)",
+        data: temperaturaFria.slice(-15),
+        borderColor: "rgb(33, 150, 243)",
+        backgroundColor: "rgba(33, 150, 243, 0.1)",
+        tension: 0,
+        pointRadius: 4,
+        pointBackgroundColor: "rgb(33, 150, 243)",
+      },
+      {
+        label: "Zona Caliente (°C)",
+        data: temperaturaCaliente.slice(-15),
+        borderColor: "rgb(231, 76, 60)",
+        backgroundColor: "rgba(231, 76, 60, 0.1)",
+        tension: 0,
+        pointRadius: 4,
+        pointBackgroundColor: "rgb(231, 76, 60)",
+      },
+    ],
+  }), [temperaturaFria, temperaturaCaliente]);
+
+  const humedadChartData = useMemo(() => ({
+    labels: humedad.slice(-15).map((_, i) => {
+      const now = new Date();
+      const ts = new Date(now.getTime() - (humedad.slice(-15).length - i - 1) * 10000);
+      return ts.toLocaleTimeString("es-MX", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/Mexico_City",
+      });
+    }),
+    datasets: [{
+      label: "Humedad (%)",
+      data: humedad.slice(-15).map(v => Math.round(v)),
+      borderColor: "rgb(76, 175, 80)",
+      backgroundColor: "rgba(76, 175, 80, 0.1)",
+      tension: 0.4,
+      pointRadius: 4,
+      pointBackgroundColor: "rgb(76, 175, 80)",
+    }],
+  }), [humedad]);
+ 
+  useEffect(() => {
+    if (temperaturaFria.length > 0) {
+      debouncedSaveToCache(CACHE_KEYS.TEMP_FRIA, temperaturaFria);
+    }
+  }, [temperaturaFria, debouncedSaveToCache]);
+
+  useEffect(() => {
+    if (temperaturaCaliente.length > 0) {
+      debouncedSaveToCache(CACHE_KEYS.TEMP_CALIENTE, temperaturaCaliente);
+    }
+  }, [temperaturaCaliente, debouncedSaveToCache]);
+
+  useEffect(() => {
+    if (humedad.length > 0) {
+      debouncedSaveToCache(CACHE_KEYS.HUMEDAD, humedad);
+    }
+  }, [humedad, debouncedSaveToCache]);
+
+  useEffect(() => {
+    if (luminosidad.length > 0) {
+      debouncedSaveToCache(CACHE_KEYS.LUMINOSIDAD, luminosidad);
+    }
+  }, [luminosidad, debouncedSaveToCache]);
+
+  useEffect(() => {
+    if (uviData.length > 0) {
+      debouncedSaveToCache(CACHE_KEYS.UV, uviData);
+    }
+  }, [uviData, debouncedSaveToCache]);
+
+  // ✅ OPTIMIZACIÓN: Rotación de mensajes info sin dependencias
+  useEffect(() => {
     const interval = setInterval(() => {
       setMensajeActual(prev => {
         const index = mensajesInfo.indexOf(prev);
@@ -213,35 +412,52 @@ const Dashboard = () => {
       });
     }, 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [datosListos, temperaturaFria.length, temperaturaCaliente.length, humedad.length]);
 
+  const [startTime] = useState(() => {
+    const newStart = Date.now();
+    localStorage.setItem('sessionStartTime', newStart.toString());
+    return newStart;
+  });
+  const [elapsedTime, setElapsedTime] = useState("0s");
+
+  const navigate = useNavigate();
 
   useEffect(() => {
+    localStorage.setItem('sessionStartTime', startTime.toString());
+    
     const interval = setInterval(() => {
-      const now = Date.now();
-      const seconds = Math.floor((now - startTime) / 1000);
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      const s = seconds % 60;
-      setElapsedTime(`${h}h ${m}m ${s}s`);
+      const diff = Date.now() - startTime;
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      if (hours > 0) {
+        setElapsedTime(`${hours}h ${minutes}m ${seconds}s`);
+      } else if (minutes > 0) {
+        setElapsedTime(`${minutes}m ${seconds}s`);
+      } else {
+        setElapsedTime(`${seconds}s`);
+      }
     }, 1000);
+    
     return () => clearInterval(interval);
   }, [startTime]);
-
 
   useEffect(() => {
     const savedMode = localStorage.getItem("modoGecko");
     if (savedMode === "manual") {
       setModoAutomatico(false);
     } else {
-      setModoAutomatico(true); // default automático
+      setModoAutomatico(true);
     }
   }, []);
 
- useEffect(() => {
+  // ✅ OPTIMIZACIÓN CLAVE: useEffect del socket SIN dependencias para evitar reconexiones
+  useEffect(() => {
     const token = localStorage.getItem("token");
     const userDataStr = localStorage.getItem("userData");
-
+    
     let userData;
     try {
       userData = userDataStr ? JSON.parse(userDataStr) : null;
@@ -264,30 +480,41 @@ const Dashboard = () => {
       return;
     }
 
-      const newStart = Date.now();
-    localStorage.setItem("sessionStartTime", newStart.toString());
-    setStartTime(newStart);
+    if (DEBUG_MODE) console.log('✅ Conectando usuario:', ID_usuario);
+    
+    if (datosListos && DEBUG_MODE) {
+      console.log('🎯 Datos en caché disponibles - mostrando inmediatamente');
+    }
 
-   socket.current = io("http://localhost:5004", {
-      auth: {
+    socket.current = io("http://localhost:5004", { 
+      auth: { 
         ID_usuario: ID_usuario,
         token: token
       },
       transports: ['websocket', 'polling'],
       forceNew: true,
-      timeout: 20000,
+      timeout: 30000,           
+      reconnection: true,       
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
       autoConnect: true
     });
 
     socket.current.on("connect", () => {
-      console.log('✅ Socket conectado correctamente');
+      if (DEBUG_MODE) console.log('✅ Socket conectado correctamente');
       setSocketConnected(true);
-
+      
       socket.current.emit('user-identification', {
         ID_usuario: ID_usuario,
         timestamp: new Date().toISOString(),
         source: 'dashboard'
       });
+
+      setTimeout(() => {
+        const mode = modoAutomaticoRef.current ? "automatico" : "manual";
+        if (DEBUG_MODE) console.log(`⚙️ Enviando modo inicial: ${mode}`);
+        socket.current.emit("modo", mode);
+      }, 1000);
     });
 
     socket.current.on("connect_error", (error) => {
@@ -296,284 +523,322 @@ const Dashboard = () => {
     });
 
     socket.current.on("disconnect", (reason) => {
-      console.log('🔴 Socket desconectado:', reason);
+      if (DEBUG_MODE) console.log('🔴 Socket desconectado:', reason);
       setSocketConnected(false);
     });
 
     socket.current.on("user-confirmed", (data) => {
-      console.log('✅ Usuario confirmado por el servidor:', data);
+      if (DEBUG_MODE) console.log('✅ Usuario confirmado:', data);
     });
 
-    // 🔧 MANEJO DE DATOS DE SENSORES MEJORADO
-    socket.current.on("sensor-data", (data) => {
-      // Solo procesar datos del usuario actual
-      if (data.ID_usuario && data.ID_usuario !== ID_usuario) {
-        console.log(`🚫 Datos rechazados - no son del usuario ${ID_usuario}:`, data);
-        return;
-      }
-
-      console.log('📊 Datos de sensor recibidos:', data);
+    // ✅ OPTIMIZACIÓN: Reducir logging en sensor-data
+    socket.current.on("sensor-data", async (data) => {
+      if (data.ID_usuario && data.ID_usuario !== ID_usuario) return;
 
       if (data.zona === "muda") {
-        const enMudaValue = data.valor === 1 || data.valor === true;
-        console.log('🦎 Estado de muda:', enMudaValue);
+        const enMudaValue = data.valor === 1 || data.valor === true || data.valor === "1" || data.valor === "true";
         setEnMuda(enMudaValue);
         return;
       }
 
       if (data.zona === "ciclo") {
         const ciclo = typeof data.valor === 'string' ? data.valor.toLowerCase() : data.valor;
-        console.log('🌅 Ciclo actualizado:', ciclo);
         setCicloDia(ciclo);
+        if (DEBUG_MODE) console.log("📥 Ciclo recibido:", ciclo);
         return;
       }
-
+      
       const valor = parseFloat(data.valor);
       if (isNaN(valor)) {
-        console.warn('⚠️ Valor de sensor inválido:', data.valor);
+        if (DEBUG_MODE) console.warn('⚠️ Valor inválido recibido:', data.valor);
         return;
       }
-
-      if (data.zona === "temperatura" ||
-        data.topic?.includes("zonafria") || data.topic?.includes("fria") ||
-        data.topic?.includes("zonacaliente") || data.topic?.includes("caliente")) {
-
+      
+      if (data.zona === "temperatura" || 
+          (data.topic && (
+            data.topic.includes("zonafria") || 
+            data.topic.includes("fria") ||
+            data.topic.includes("zonacaliente") || 
+            data.topic.includes("caliente")
+          ))) {
+        
         let zona = null;
-        if (data.topic?.includes("zonafria") || data.topic?.includes("fria")) {
+        if (data.topic && (data.topic.includes("zonafria") || data.topic.includes("fria"))) {
           zona = "fria";
-        } else if (data.topic?.includes("zonacaliente") || data.topic?.includes("caliente")) {
+        } else if (data.topic && (data.topic.includes("zonacaliente") || data.topic.includes("caliente"))) {
           zona = "caliente";
+        } else if (data.zona === "temperatura") {
+          zona = data.tipo || "fria"; 
         }
-
+        
         if (zona === "fria") {
-          console.log('❄️ Temperatura fría:', valor);
+          if (DEBUG_MODE) console.log('❄️ Temperatura fría:', valor);
           setTemperaturaFria(prev => [...prev.slice(-49), valor]);
         } else if (zona === "caliente") {
-          console.log('🔥 Temperatura caliente:', valor);
+          if (DEBUG_MODE) console.log('🔥 Temperatura caliente:', valor);
           setTemperaturaCaliente(prev => [...prev.slice(-49), valor]);
         }
         return;
       }
-
-      if (data.zona === "humedad" || data.topic?.includes("humedad")) {
-        console.log('💧 Humedad:', valor);
+  
+      if (data.zona === "humedad" || (data.topic && data.topic.includes("humedad"))) {
+        if (DEBUG_MODE) console.log('💧 Humedad recibida:', valor);
         setHumedad(prev => [...prev.slice(-49), valor]);
-      } else if (data.zona === "luminosidad" || data.topic?.includes("luminosidad")) {
-        console.log('☀️ Luminosidad:', valor);
+      } else if (data.zona === "luminosidad" || (data.topic && data.topic.includes("luminosidad"))) {
+        if (DEBUG_MODE) console.log('☀️ Luminosidad recibida:', valor);
         setLuminosidad(prev => [...prev.slice(-49), valor]);
-      } else if (data.zona === "luz_uv" || data.topic?.includes("uvi")) {
-        console.log('🔆 UV recibido:', valor);
+      } else if (data.zona === "luz_uv" || (data.topic && data.topic.includes("uvi"))) {
+        if (DEBUG_MODE) console.log('🔆 UV recibido:', valor);
         setLuzUV(valor > 0);
         setUVIData(prev => [...prev.slice(-49), valor]);
       }
     });
 
-    // 🔧 MANEJO DE CONFIRMACIONES DE ACTUADORES MEJORADO
-    socket.current.on("actuador-confirmado", (data) => {
-      // Solo procesar confirmaciones del usuario actual
+    socket.current.on("actuador-data", (data) => {
+      if (DEBUG_MODE) console.log('🎛️ Datos de actuador:', data);
+      
       if (data.ID_usuario && data.ID_usuario !== ID_usuario) {
-        console.log(`🚫 Confirmación rechazada - no es del usuario ${ID_usuario}:`, data);
         return;
       }
 
-      console.log('✅ Confirmación de actuador recibida:', data);
       const { zona, valor } = data;
       const numeric = typeof valor === "string" ? parseInt(valor) : valor;
-
+      
       switch (zona) {
-        case "placaP":
-        case "placa":
-          setPlacaTermica(numeric);
-          console.log(`🔥 Placa térmica actualizada: ${numeric}%`);
+        case "placaP": 
+        case "placa": 
+          if (DEBUG_MODE) console.log('🔥 Actualizando placa térmica:', numeric);
+          setPlacaTermica(numeric); 
           break;
-
-        case "humidificadorP":
+        case "humidificadorP": 
         case "humidificador":
-          setHumidificador(numeric === 1);
-          setBloqueoHumidificador(false);
-          console.log(`💧 Humidificador actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          if (DEBUG_MODE) console.log('💧 Actualizando humidificador:', numeric === 1);
+          setHumidificador(numeric === 1); 
           break;
-
-        case "focoP":
+        case "focoP": 
         case "foco":
-          setControlFoco(numeric === 1);
-          setBloqueoFoco(false);
-          console.log(`💡 Foco actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          if (DEBUG_MODE) console.log('💡 Actualizando foco:', numeric === 1);
+          setControlFoco(numeric === 1); 
           break;
-
-        case "focouviP":
+        case "focouviP": 
         case "focouvi":
         case "uv":
-          setControlUV(numeric === 1);
-          setBloqueoUV(false);
-          console.log(`🔆 UV actualizado: ${numeric === 1 ? 'ON' : 'OFF'}`);
+          if (DEBUG_MODE) console.log('🔆 Actualizando UV:', numeric === 1);
+          setControlUV(numeric === 1); 
           break;
-
-        case "modo":
-          const isAuto = numeric === 1;
-          setModoAutomatico(isAuto);
-          localStorage.setItem("modoGecko", isAuto ? "auto" : "manual");
-          showModeToast(isAuto, setShowToast, setToastMessage);
-          console.log(`⚙️ Modo actualizado: ${isAuto ? 'AUTOMÁTICO' : 'MANUAL'}`);
+        default: 
+          if (DEBUG_MODE) console.warn('⚠️ Zona de actuador desconocida:', zona);
           break;
-
-        default:
-          console.warn(`🔁 Zona desconocida en actuador-confirmado: ${zona}`);
       }
     });
 
-    // 🔧 CARGAR DATOS INICIALES DE TEMPERATURA
-    fetch(`http://localhost:5004/api/historial/temperatura?ID_usuario=${ID_usuario}`)
-      .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
-      .then(data => {
-        if (data.length > 0) {
-          const fria = data.filter(d => d.zona === 'fria' || d.zona === 'fría').map(d => d.medicion);
-          const caliente = data.filter(d => d.zona === 'caliente').map(d => d.medicion);
-
-          setTemperaturaFria(fria.slice(-50));
-          setTemperaturaCaliente(caliente.slice(-50));
-          console.log(`📊 Datos de temperatura cargados: ${fria.length} fría, ${caliente.length} caliente`);
+    const loadInitialData = async () => {
+      if (DEBUG_MODE) console.log('📥 Cargando datos iniciales...');
+      
+      if (datosListos && 
+          temperaturaFria.length > 0 && 
+          temperaturaCaliente.length > 0 && 
+          humedad.length > 0) {
+        if (DEBUG_MODE) console.log('🎯 Usando datos del caché - omitiendo carga inicial');
+        setDatosListos(true);
+        return;
+      }
+      
+      try {
+        // TEMPERATURA
+        if (DEBUG_MODE) console.log('📊 Solicitando datos de temperatura...');
+        const tempResponse = await fetch(`http://localhost:5000/api/historial/temperatura?ID_usuario=${ID_usuario}`);
+        if (tempResponse.ok) {
+          const tempData = await tempResponse.json();
+          if (DEBUG_MODE) console.log('📊 Datos de temperatura recibidos:', tempData.length, 'registros');
+          
+          if (tempData.length > 0) {
+            const fria = tempData.filter(d => d.zona === 'fria' || d.zona === 'fría').map(d => d.medicion);
+            const caliente = tempData.filter(d => d.zona === 'caliente').map(d => d.medicion);
+            
+            if (DEBUG_MODE) {
+              console.log('❄️ Temperaturas frías encontradas:', fria.length);
+              console.log('🔥 Temperaturas calientes encontradas:', caliente.length);
+            }
+            
+            setTemperaturaFria(fria.slice(-50));
+            setTemperaturaCaliente(caliente.slice(-50));
+          }
+        } else {
+          console.error('❌ Error al cargar temperatura:', tempResponse.status);
         }
-      })
-      .catch(error => {
-        console.error("❌ Error cargando datos de temperatura:", error);
-      });
 
-    // 🔧 CARGAR DATOS INICIALES DE HUMEDAD
-    fetch(`http://localhost:5004/api/historial/humedad?ID_usuario=${ID_usuario}`)
-      .then(res => res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`))
-      .then(data => {
-        if (data.length > 0) {
-          const humedadValues = data.map(d => d.medicion);
-          setHumedad(humedadValues.slice(-50));
-          console.log(`📊 Datos de humedad cargados: ${humedadValues.length} registros`);
+        if (DEBUG_MODE) console.log('📊 Solicitando datos de humedad...');
+        const humResponse = await fetch(`http://localhost:5000/api/historial/humedad?ID_usuario=${ID_usuario}`);
+        if (humResponse.ok) {
+          const humData = await humResponse.json();
+          if (DEBUG_MODE) console.log('📊 Datos de humedad recibidos:', humData.length, 'registros');
+          
+          if (humData.length > 0) {
+            const humedadValues = humData.map(d => d.medicion);
+            setHumedad(humedadValues.slice(-50));
+          }
+        } else {
+          console.error('❌ Error al cargar humedad:', humResponse.status);
         }
-      })
-      .catch(error => {
-        console.error("❌ Error cargando datos de humedad:", error);
-      });
 
-    // CLEANUP AL DESMONTAR
+        if (DEBUG_MODE) console.log('📊 Solicitando datos de luminosidad...');
+        try {
+          let lumResponse = await fetch(`http://localhost:5000/api/historial/luminosidad?ID_usuario=${ID_usuario}`);
+          if (!lumResponse.ok) {
+            lumResponse = await fetch(`http://localhost:5000/api/historial/luz?ID_usuario=${ID_usuario}`);
+          }
+          
+          if (lumResponse.ok) {
+            const lumData = await lumResponse.json();
+            if (DEBUG_MODE) console.log('📊 Datos de luminosidad recibidos:', lumData.length, 'registros');
+            
+            if (lumData.length > 0) {
+              const lumValues = lumData.map(d => d.medicion);
+              setLuminosidad(lumValues.slice(-50));
+            }
+          } else {
+            console.warn('⚠️ No se pudo cargar historial de luminosidad');
+          }
+        } catch (error) {
+          console.error('❌ Error cargando luminosidad:', error);
+        }
+
+        if (DEBUG_MODE) console.log('📊 Solicitando datos de UV...');
+        try {
+          let uvResponse = await fetch(`http://localhost:5000/api/historial/luz_uv?ID_usuario=${ID_usuario}`);
+          if (!uvResponse.ok) {
+            uvResponse = await fetch(`http://localhost:5000/api/historial/uv?ID_usuario=${ID_usuario}`);
+          }
+          
+          if (uvResponse.ok) {
+            const uvData = await uvResponse.json();
+            if (DEBUG_MODE) console.log('📊 Datos de UV recibidos:', uvData.length, 'registros');
+            
+            if (uvData.length > 0) {
+              const uvValues = uvData.map(d => d.medicion);
+              setUVIData(uvValues.slice(-50));
+            }
+          } else {
+            console.warn('⚠️ No se pudo cargar historial de UV');
+          }
+        } catch (error) {
+          console.error('❌ Error cargando UV:', error);
+        }
+
+      } catch (error) {
+        console.error("❌ Error general cargando datos iniciales:", error);
+      }
+    };
+
+    loadInitialData();
+
+    // CLEANUP
     return () => {
       if (socket.current) {
-        console.log('🔌 Desconectando socket...');
+        if (DEBUG_MODE) console.log('🔌 Desconectando socket...');
         socket.current.disconnect();
         socket.current = null;
       }
       setSocketConnected(false);
     };
-  }, [navigate]); // Solo navigate como dependencia
+  }, []); 
 
-  // 🔧 FUNCIONES DE CONTROL MEJORADAS
-  const handlePlacaChange = (newValue) => {
+
+  const handlePlacaChange = useCallback((newValue) => {
     const val = Math.max(0, Math.min(100, newValue));
     setPlacaTermica(val);
     if (!modoAutomatico && socket.current?.connected) {
-      console.log(`🔥 Enviando comando placa térmica: ${val}%`);
+      if (DEBUG_MODE) console.log(`🔥 Enviando comando placa térmica: ${val}%`);
       socket.current.emit("placa-termica", { temperatura: val });
     }
-  };
+  }, [modoAutomatico]);
 
-  const handleControlToggle = (type) => {
+  const handleControlToggle = useCallback((type) => {
     if (modoAutomatico) {
-      console.log('⚠️ Modo automático activo, comando ignorado');
+      if (DEBUG_MODE) console.log('⚠️ Modo automático activo, comando ignorado');
       return;
     }
-
+    
     if (!socket.current?.connected) {
       console.error('❌ Socket no conectado, no se puede enviar comando');
       return;
     }
-
+    
     switch (type) {
       case 'uv':
-        if (bloqueoUV) {
-          console.log('⚠️ UV bloqueado, esperando respuesta...');
-          return;
-        }
-
+        if (bloqueoUV) return;
         setBloqueoUV(true);
-        const nuevoEstadoUV = !controlUV;
-
-        console.log(`🔆 Enviando comando UV: ${nuevoEstadoUV ? 'ON' : 'OFF'}`);
-        socket.current.emit("control-uv", { encendido: nuevoEstadoUV });
-
-        // Timeout de seguridad
+        const estadoUV = !controlUV;
+        if (DEBUG_MODE) console.log(`🔆 Enviando comando UV: ${estadoUV ? 'ON' : 'OFF'}`);
+        
+        socket.current.emit("control-uv", { encendido: estadoUV });
+        
         setTimeout(() => {
+          setControlUV(estadoUV);
           setBloqueoUV(false);
-          console.log('🔆 Timeout UV - desbloqueando control');
-        }, 3000);
+        }, 1000);
         break;
-
+        
       case 'foco':
-        if (bloqueoFoco) {
-          console.log('⚠️ Foco bloqueado, esperando respuesta...');
-          return;
-        }
-
+        if (bloqueoFoco) return;
         setBloqueoFoco(true);
-        const nuevoEstadoFoco = !controlFoco;
-
-        console.log(`💡 Enviando comando foco: ${nuevoEstadoFoco ? 'ON' : 'OFF'}`);
-        socket.current.emit("control-foco", { encendido: nuevoEstadoFoco });
-
-        // Timeout de seguridad
+        const estadoFoco = !controlFoco;
+        if (DEBUG_MODE) console.log(`💡 Enviando comando foco: ${estadoFoco ? 'ON' : 'OFF'}`);
+        
+        socket.current.emit("control-foco", { encendido: estadoFoco });
+        
         setTimeout(() => {
+          setControlFoco(estadoFoco);
           setBloqueoFoco(false);
-          console.log('💡 Timeout Foco - desbloqueando control');
-        }, 3000);
+        }, 1000);
         break;
-
+        
       case 'humidificador':
-        if (bloqueoHumidificador) {
-          console.log('⚠️ Humidificador bloqueado, esperando respuesta...');
-          return;
-        }
-
+        if (bloqueoHumidificador) return;
         setBloqueoHumidificador(true);
-        const nuevoEstadoHum = !humidificador;
-
-        console.log(`💧 Enviando comando humidificador: ${nuevoEstadoHum ? 'ON' : 'OFF'}`);
-        socket.current.emit("control-humidificador", { encendido: nuevoEstadoHum });
-
-        // Timeout de seguridad
+        const estadoHum = !humidificador;
+        if (DEBUG_MODE) console.log(`💧 Enviando comando humidificador: ${estadoHum ? 'ON' : 'OFF'}`);
+        
+        socket.current.emit("control-humidificador", { encendido: estadoHum });
+        
         setTimeout(() => {
+          setHumidificador(estadoHum);
           setBloqueoHumidificador(false);
-          console.log('💧 Timeout Humidificador - desbloqueando control');
-        }, 3000);
+        }, 1000);
         break;
-
+        
       default:
-        console.warn(`❌ Tipo de control no reconocido: ${type}`);
+        console.warn(`Tipo de control no reconocido: ${type}`);
         break;
     }
-  };
+  }, [modoAutomatico, controlUV, controlFoco, humidificador, bloqueoUV, bloqueoFoco, bloqueoHumidificador]);
 
-  const handleModeChange = (isAutomatic) => {
+  const handleModeChange = useCallback((isAutomatic) => {
     setModoAutomatico(isAutomatic);
     localStorage.setItem("modoGecko", isAutomatic ? "auto" : "manual");
-
+    
     if (socket.current?.connected) {
       const mode = isAutomatic ? "automatico" : "manual";
-      console.log(`⚙️ Enviando cambio de modo: ${mode}`);
+      if (DEBUG_MODE) console.log(`🔄 Cambiando modo a: ${mode.toUpperCase()}`);
       socket.current.emit("modo", mode);
     }
-
+    
     showModeToast(isAutomatic, setShowToast, setToastMessage);
-  };
+  }, []);
 
-  // 🔧 FUNCIONES DE EVALUACIÓN MEJORADAS
-  const evaluarEstadoTemperatura = () => {
+  // ✅ OPTIMIZACIÓN: Funciones de evaluación con useMemo
+  const evaluarEstadoTemperatura = useMemo(() => {
     const tf = temperaturaFria.at(-1);
     const tc = temperaturaCaliente.at(-1);
-
+    
     if (!Number.isFinite(tf) || !Number.isFinite(tc)) {
       return 'sinDatos';
     }
-
+    
     const frioEval = evaluarParametro(tf, LIMITES.temperaturaFria);
     const calienteEval = evaluarParametro(tc, LIMITES.temperaturaCaliente);
-
+    
     if (frioEval.estado === "critico" || calienteEval.estado === "critico") {
       return 'critico';
     } else if (frioEval.estado === "revisar" || calienteEval.estado === "revisar") {
@@ -581,190 +846,211 @@ const Dashboard = () => {
     } else {
       return 'ideal';
     }
-  };
+  }, [temperaturaFria, temperaturaCaliente]);
 
-  const evaluarEstadoHumedad = () => {
+  const evaluarEstadoHumedad = useMemo(() => {
     const humedadActual = humedad.at(-1);
-
+    
     if (!Number.isFinite(humedadActual)) {
       return 'sinDatos';
+    }
+    
+    const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
+    const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
+    
+    return humedadEval.estado;
+  }, [humedad, enMuda]);
+
+  // ✅ OPTIMIZACIÓN: Solo log cuando cambian significativamente los arrays
+  useEffect(() => {
+    if (DEBUG_MODE) {
+      console.log('📊 Estado actual de arrays:');
+      console.log('❄️ Temperatura fría:', temperaturaFria.length, 'elementos', temperaturaFria.slice(-3));
+      console.log('🔥 Temperatura caliente:', temperaturaCaliente.length, 'elementos', temperaturaCaliente.slice(-3));
+      console.log('💧 Humedad:', humedad.length, 'elementos', humedad.slice(-3));
+      console.log('☀️ Luminosidad:', luminosidad.length, 'elementos', luminosidad.slice(-3));
+      console.log('🔆 UV:', uviData.length, 'elementos', uviData.slice(-3));
+    }
+  }, []); 
+
+
+  return (
+    <PageContainer>
+      {/* Header */}
+      <Header showUserIcon/>
+        {/* Tarjetas de Estado Superior */}
+        <TopCards>
+          {/* Ciclo */}
+<StatusCard
+  bgColor={(() => {
+    switch (cicloDia?.trim().toLowerCase()) {
+      case "dia":
+         return "linear-gradient(135deg, #64b5f6, #fff176)";
+      case "noche":
+        return "linear-gradient(135deg,rgba(40, 52, 147, 0.64),rgba(105, 27, 154, 0.63))";
+      case "diaam":
+      case "amanecer":
+        return "linear-gradient(135deg, #fbc02d, #ffe082)";
+      default:
+        return "linear-gradient(135deg, #757575, #9e9e9e)";
+    }
+  })()}
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.1 }}
+>
+  <StatusTitle>Ciclo</StatusTitle>
+  <StatusValue style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    {(() => {
+      const val = cicloDia?.trim().toLowerCase() || "";
+      const iconStyle = { filter: "drop-shadow(0 0 2px white)" };
+      switch (val) {
+        case "dia":
+          return <>DÍA <CycleIcon src={dia} alt="Día" style={iconStyle} /></>;
+        case "noche":
+          return <>NOCHE <CycleIcon src={noche} alt="Noche" style={iconStyle} /></>;
+        case "diaam":
+        case "amanecer":
+          return <>AMANECER <CycleIcon src={dia} alt="Amanecer" style={iconStyle} /></>;
+        default:
+          return <>SIN DATOS</>;
+      }
+    })()}
+  </StatusValue>
+</StatusCard>
+
+          {/* Estado Temperatura */}
+<StatusCard
+  bgColor={(() => {
+    const val = mensajeTemp.getValor.at(-1);
+    const evalTemp = evaluarParametro(val, LIMITES.temperatura[mensajeTemp.zona], true, cicloDia);
+    return evalTemp.color === "red"
+      ? "linear-gradient(135deg,rgba(183, 28, 28, 0.7),rgba(244, 67, 54, 0.7))"
+      : evalTemp.color === "orange"
+      ? "linear-gradient(135deg,rgba(255, 153, 0, 0.75),rgba(255, 193, 7, 0.75))"
+      : evalTemp.color === "green"
+      ? "linear-gradient(135deg,rgba(46, 125, 50, 0.7), #66bb6a)"
+      : "linear-gradient(135deg, #757575, #9e9e9e)";
+  })()}
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.3 }}
+>
+  <StatusTitle>Temperatura - {mensajeTemp.label}</StatusTitle>
+  <StatusValue style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+    <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+      Actual: {Number.isFinite(mensajeTemp.getValor.at(-1)) ? `${mensajeTemp.getValor.at(-1).toFixed(1)}°C` : "--"}
+    </div>
+    <div style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap", textAlign: "center" }}>
+      {(() => {
+        const val = mensajeTemp.getValor.at(-1);
+        if (!Number.isFinite(val)) {
+          return (
+            <>
+              SIN DATOS
+              <StatusIcon src={advertencia} alt="Sin datos" />
+            </>
+          );
+        }
+
+        const evalTemp = evaluarParametro(val, LIMITES.temperatura[mensajeTemp.zona], true, cicloDia);
+
+        if (evalTemp.color === "red") {
+          return (
+            <>
+              ESTADO CRÍTICO
+              <StatusIcon src={peligro} alt="Crítico" />
+            </>
+          );
+        } else if (evalTemp.color === "orange") {
+          return (
+            <>
+              REVISAR ESTADO
+              <StatusIcon src={advertencia} alt="Revisar" />
+            </>
+          );
+        } else {
+          return (
+            <>
+              ESTADO IDEAL
+              <StatusIcon src={ok} alt="Óptimo" />
+            </>
+          );
+        }
+      })()}
+    </div>
+  </StatusValue>
+</StatusCard>
+
+{/* Estado Humedad */}
+<StatusCard
+  bgColor={(() => {
+    const humedadActual = humedad.at(-1);
+    if (!Number.isFinite(humedadActual)) {
+      return "linear-gradient(135deg, #757575, #9e9e9e)";
     }
 
     const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
     const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
 
-    return humedadEval.estado;
-  };
+    return humedadEval.color === "red"
+      ? "linear-gradient(135deg,rgba(183, 28, 28, 0.7),rgba(244, 67, 54, 0.7))"
+      : humedadEval.color === "orange"
+      ? "linear-gradient(135deg,rgba(255, 153, 0, 0.7),rgba(255, 193, 7, 0.7))"
+      : "linear-gradient(135deg,rgba(0, 121, 107, 0.7),rgba(77, 182, 172, 0.7))";
+  })()}
+  initial={{ opacity: 0, y: 20 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: 0.4 }}
+>
+  <StatusTitle>Humedad</StatusTitle>
+  <StatusValue style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+    <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+      Actual: {Number.isFinite(humedad.at(-1)) ? `${Math.round(humedad.at(-1))}%` : "--"}
+    </div>
+    <div style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap", textAlign: "center" }}>
+      {(() => {
+        const humedadActual = humedad.at(-1);
 
-  return (
-    <PageContainer>
-      <Header showUserIcon />
-        {/* Tarjetas de Estado Superior */}
-        <TopCards>
-          {/* Ciclo */}
-          <StatusCard
-            bgColor="linear-gradient(135deg, #f57c00 0%, #ff9800 100%)"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <StatusTitle>Ciclo</StatusTitle>
-            <StatusValue>
-              {cicloDia === "dia" ? "DÍA" : 
-               cicloDia === "noche" ? "NOCHE" : 
-               cicloDia === "diaam" ? "AMANECER" : 
-               cicloDia.toUpperCase()}
-              <CycleIcon src={cicloDia === "dia" ? dia : noche} alt={cicloDia} />
-            </StatusValue>
-          </StatusCard>
+        if (!Number.isFinite(humedadActual)) {
+          return (
+            <>
+              SIN DATOS
+              <StatusIcon src={advertencia} alt="Sin datos" />
+            </>
+          );
+        }
 
-          {/* Estado Temperatura */}
-          <StatusCard
-            bgColor={(() => {
-              const tf = temperaturaFria.at(-1);
-              const tc = temperaturaCaliente.at(-1);
-              
-              if (!Number.isFinite(tf) || !Number.isFinite(tc)) {
-                return "linear-gradient(135deg, #757575 0%, #9e9e9e 100%)";
-              }
-              
-              const frioEval = evaluarParametro(tf, LIMITES.temperaturaFria);
-              const calienteEval = evaluarParametro(tc, LIMITES.temperaturaCaliente);
-              
-              if (frioEval.color === "red" || calienteEval.color === "red") {
-                return "linear-gradient(135deg,rgba(211, 47, 47, 0.65) 0%, #f44336 100%)";
-              } else if (frioEval.color === "orange" || calienteEval.color === "orange") {
-                return "linear-gradient(135deg,rgba(245, 123, 0, 0.66) 0%,rgba(255, 153, 0, 0.62) 100%)";
-              } else {
-                return "linear-gradient(135deg,rgba(46, 125, 50, 0.62) 0%,rgba(76, 175, 79, 0.62) 100%)";
-              }
-            })()}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <StatusTitle>Temperatura</StatusTitle>
-<StatusValue>
-  <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
-    Fría: {temperaturaFria.at(-1)?.toFixed(1) ?? "--"}°C | Caliente: {temperaturaCaliente.at(-1)?.toFixed(1) ?? "--"}°C
-  </div>
-  <div style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap", textAlign: "center" }}>
-    {(() => {
-      const tf = temperaturaFria.at(-1);
-      const tc = temperaturaCaliente.at(-1);
+        const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
+        const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
 
-      if (!Number.isFinite(tf) || !Number.isFinite(tc)) {
-        return (
-          <>
-            SIN DATOS
-            <StatusIcon src={advertencia} alt="Sin datos" />
-          </>
-        );
-      }
+        if (humedadEval.color === "red") {
+          return (
+            <>
+              ESTADO CRÍTICO
+              <StatusIcon src={peligro} alt="Crítico" />
+            </>
+          );
+        } else if (humedadEval.color === "orange") {
+          return (
+            <>
+              REVISAR HUMEDAD
+              <StatusIcon src={advertencia} alt="Revisar" />
+            </>
+          );
+        } else {
+          return (
+            <>
+              ESTADO IDEAL
+              <StatusIcon src={ok} alt="Óptimo" />
+            </>
+          );
+        }
+      })()}
+    </div>
+  </StatusValue>
+</StatusCard>
 
-      const frioEval = evaluarParametro(tf, LIMITES.temperaturaFria);
-      const calienteEval = evaluarParametro(tc, LIMITES.temperaturaCaliente);
-
-      if (frioEval.color === "red" || calienteEval.color === "red") {
-        return (
-          <>
-            ESTADO CRÍTICO
-            <StatusIcon src={peligro} alt="Crítico" />
-          </>
-        );
-      } else if (frioEval.color === "orange" || calienteEval.color === "orange") {
-        return (
-          <>
-            REVISAR TERRARIO
-            <StatusIcon src={advertencia} alt="Revisar" />
-          </>
-        );
-      } else {
-        return (
-          <>
-            ESTADO IDEAL
-            <StatusIcon src={ok} alt="Óptimo" />
-          </>
-        );
-      }
-    })()}
-  </div>
-</StatusValue>
-
-          </StatusCard>
-
-          {/* Estado Humedad */}
-          <StatusCard
-            bgColor={(() => {
-              const humedadActual = humedad.at(-1);
-              
-              if (!Number.isFinite(humedadActual)) {
-                return "linear-gradient(135deg,rgba(117, 117, 117, 0.61) 0%,rgba(158, 158, 158, 0.62) 100%)";
-              }
-              
-              const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
-              const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
-              
-              if (humedadEval.color === "red") {
-                return "linear-gradient(135deg,rgba(211, 47, 47, 0.61) 0%,rgba(244, 67, 54, 0.61) 100%)";
-              } else if (humedadEval.color === "orange") {
-                return "linear-gradient(135deg,rgba(245, 123, 0, 0.63) 0%,rgba(255, 153, 0, 0.62) 100%)";
-              } else {
-                return "linear-gradient(135deg,rgba(0, 187, 212, 0.63) 0%,rgba(77, 208, 225, 0.6) 100%)";
-              }
-            })()}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <StatusTitle>Humedad</StatusTitle>
-            <StatusValue>
-  <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
-    Actual: {humedad.at(-1) ? `${Math.round(humedad.at(-1))}%` : '--'}
-  </div>
-  <div style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px", marginTop: "4px", flexWrap: "wrap", textAlign: "center" }}>
-    {(() => {
-      const humedadActual = humedad.at(-1);
-
-      if (!Number.isFinite(humedadActual)) {
-        return (
-          <>
-            SIN DATOS
-            <StatusIcon src={advertencia} alt="Sin datos" />
-          </>
-        );
-      }
-
-      const limitesHumedad = LIMITES.humedad?.[enMuda ? "muda" : "normal"];
-      const humedadEval = evaluarParametro(humedadActual, limitesHumedad);
-
-      if (humedadEval.color === "red") {
-        return (
-          <>
-            ESTADO CRÍTICO
-            <StatusIcon src={peligro} alt="Crítico" />
-          </>
-        );
-      } else if (humedadEval.color === "orange") {
-        return (
-          <>
-            REVISAR HUMEDAD
-            <StatusIcon src={advertencia} alt="Revisar" />
-          </>
-        );
-      } else {
-        return (
-          <>
-            ESTADO IDEAL
-            <StatusIcon src={ok} alt="Óptimo" />
-          </>
-        );
-      }
-    })()}
-  </div>
-</StatusValue>
-
-          </StatusCard>
 <StatusCard
   bgColor={getInfoBgColor(mensajeActual)}
   initial={{ opacity: 0, y: 20 }}
@@ -805,44 +1091,13 @@ const Dashboard = () => {
 </TopCards>
 <MainContainer>
   <LeftSection>
-        {/* Gráfica de Temperatura */}
+        {/* Gráfica de Temperatura - ✅ OPTIMIZADA */}
 <ChartWithMonitorRow>
   <ChartCard>
     <ChartTitle>🌡️ Temperatura ({temperaturaFria.length + temperaturaCaliente.length} registros)</ChartTitle>
     <ChartContainer>
       <Line
-        data={{
-          labels: temperaturaFria.slice(-15).map((_, i) => {
-            const now = new Date();
-            const ts = new Date(now.getTime() - (temperaturaFria.slice(-15).length - i - 1) * 10000);
-            return ts.toLocaleTimeString("es-MX", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: false,
-              timeZone: "America/Mexico_City",
-            });
-          }),
-          datasets: [
-            {
-              label: "Zona Fría (°C)",
-              data: temperaturaFria.slice(-15),
-              borderColor: "rgb(33, 150, 243)",
-              backgroundColor: "rgba(33, 150, 243, 0.1)",
-              tension: 0,
-              pointRadius: 4,
-              pointBackgroundColor: "rgb(33, 150, 243)",
-            },
-            {
-              label: "Zona Caliente (°C)",
-              data: temperaturaCaliente.slice(-15),
-              borderColor: "rgb(231, 76, 60)",
-              backgroundColor: "rgba(231, 76, 60, 0.1)",
-              tension: 0,
-              pointRadius: 4,
-              pointBackgroundColor: "rgb(231, 76, 60)",
-            },
-          ],
-        }}
+        data={temperaturaChartData}
         options={{
           responsive: true,
           maintainAspectRatio: false,
@@ -887,10 +1142,9 @@ const Dashboard = () => {
       <DataLabel>STATUS:</DataLabel>
       <DataValue>
         {(() => {
-          const estado = evaluarEstadoTemperatura();
-          if (estado === 'sinDatos') return 'NO_DATA';
-          if (estado === 'critico') return 'CRITICO';
-          if (estado === 'revisar') return 'REVISAR';
+          if (evaluarEstadoTemperatura === 'sinDatos') return 'NO_DATA';
+          if (evaluarEstadoTemperatura === 'critico') return 'CRITICO';
+          if (evaluarEstadoTemperatura === 'revisar') return 'REVISAR';
           return 'OPTIMO';
         })()}
       </DataValue>
@@ -898,34 +1152,13 @@ const Dashboard = () => {
   </DataDisplayCard>
 </ChartWithMonitorRow>
 
-      
-        {/* Gráfica de Humedad */}
+        {/* Gráfica de Humedad - ✅ OPTIMIZADA */}
             <ChartWithMonitorRow>
               <ChartCard>
                 <ChartTitle>💧 Humedad ({humedad.length} registros)</ChartTitle>
                 <ChartContainer>
                   <Line
-                    data={{
-                      labels: humedad.slice(-15).map((_, i) => {
-                        const now = new Date();
-                        const ts = new Date(now.getTime() - (humedad.slice(-15).length - i - 1) * 10000);
-                        return ts.toLocaleTimeString("es-MX", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: false,
-                          timeZone: "America/Mexico_City",
-                        });
-                      }),
-                      datasets: [{
-                        label: "Humedad (%)",
-                        data: humedad.slice(-15).map(v => Math.round(v)),
-                        borderColor: "rgb(76, 175, 80)",
-                        backgroundColor: "rgba(76, 175, 80, 0.1)",
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointBackgroundColor: "rgb(76, 175, 80)",
-                      }],
-                    }}
+                    data={humedadChartData}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
@@ -966,18 +1199,16 @@ const Dashboard = () => {
                   <DataLabel>STATUS:</DataLabel>
                   <DataValue>
                     {(() => {
-                      const estado = evaluarEstadoHumedad();
-                      if (estado === 'sinDatos') return 'NO_DATA';
-                      if (estado === 'critico') return 'CRITICO';
-                      if (estado === 'revisar') return 'REVISAR';
-                      return 'OPTIMO';
+                      if (evaluarEstadoHumedad === 'sinDatos') return <>SIN DATOS <StatusIcon src={advertencia} /></>;
+                      if (evaluarEstadoHumedad === 'alto' || evaluarEstadoHumedad === 'bajo') return <>REVISAR <StatusIcon src={advertencia} /></>;
+                      return <>ESTADO IDEAL <StatusIcon src={ok} /></>;
                     })()}
                   </DataValue>
                 </DataRow>
               </DataDisplayCard>
             </ChartWithMonitorRow>
 
-        {/* Gráfica de Luminosidad */}
+   {/* 🔧 GRÁFICA DE LUMINOSIDAD CORREGIDA */}
 <ChartWithMonitorRow>               
   <ChartCard>                 
     <ChartTitle>☀️ Luminosidad ({luminosidad.length} registros)</ChartTitle>                 
@@ -996,7 +1227,7 @@ const Dashboard = () => {
           }),                       
           datasets: [{                         
             label: "Luminosidad (lux)",                         
-            data: luminosidad.slice(-15).map(val => Math.round(val)), // Redondear valores
+            data: luminosidad.slice(-15),
             borderColor: "rgb(255, 193, 7)",                         
             backgroundColor: "rgba(255, 193, 7, 0.1)",                         
             tension: 0.1,                         
@@ -1020,30 +1251,23 @@ const Dashboard = () => {
             y: {                            
               title: { display: true, text: "Luminosidad (lux)" },                           
               grid: { color: "rgba(0,0,0,0.1)" },
-              // Rango mucho más pequeño y fijo
+              // 🔧 CORRECCIÓN: Rango fijo más amplio y sin decimales
               min: function(context) {
+                if (!context?.chart?.data?.datasets?.[0]?.data?.length) return 50;
                 const data = context.chart.data.datasets[0].data;
                 const minVal = Math.min(...data);
-                const maxVal = Math.max(...data);
-                const average = (minVal + maxVal) / 2;
-                
-                // Usar solo ±0.5 del promedio para hacerlo muy plano
-                return Math.floor(average - 0.5);
+                return Math.floor(minVal - 5); // Buffer de 5 unidades
               },
               max: function(context) {
+                if (!context?.chart?.data?.datasets?.[0]?.data?.length) return 70;
                 const data = context.chart.data.datasets[0].data;
-                const minVal = Math.min(...data);
                 const maxVal = Math.max(...data);
-                const average = (minVal + maxVal) / 2;
-                
-             
-                return Math.ceil(average + 0.5);
+                return Math.ceil(maxVal + 5); // Buffer de 5 unidades
               },
-             
               ticks: {
-                stepSize: 0.2, 
+                stepSize: 1, // Pasos de 1 en 1, sin decimales
                 callback: function(value) {
-                  return Math.round(value * 10) / 10; 
+                  return Math.round(value); // Solo números enteros
                 }
               }
             },                       
@@ -1051,42 +1275,37 @@ const Dashboard = () => {
         }}                   
       />                 
     </ChartContainer>               
-  </ChartCard>                
+  </ChartCard>                      
 
-  {/* Monitor de Luminosidad */}               
-  <DataDisplayCard>                 
-    <DataDisplayTitle>☀️ Luz</DataDisplayTitle>                 
-    <DataRow>                   
-      <DataLabel>LUMINOSIDAD:</DataLabel>                   
-      <DataValue>
-        {luminosidad.at(-1) ? `${Math.round(luminosidad.at(-1))} lux` : '--'}
-      </DataValue>                 
-    </DataRow>                 
-    <DataRow>                   
-      <DataLabel>UV STATUS:</DataLabel>                   
-      <DataValue>{uvi ? 'ACTIVO' : 'INACTIVO'}</DataValue>                 
-    </DataRow>                 
-    <DataRow>                   
-      <DataLabel>FOCO NORMAL:</DataLabel>                   
-      <DataValue>{controlFoco ? 'ON' : 'OFF'}</DataValue>                 
-    </DataRow>                 
-    <DataRow>                   
-      <DataLabel>STATUS:</DataLabel>                   
-      <DataValue>                     
-        {(() => {                       
-          const luzActual = luminosidad.at(-1);                       
-          if (!Number.isFinite(luzActual)) return 'NO_DATA';                       
-          const luzEval = evaluarParametro(Math.round(luzActual), LIMITES.luminosidad || { bajo: 200, alto: 1000 });                       
-          if (luzEval.estado === "critico") return 'CRITICO';                       
-          if (luzEval.estado === "revisar") return 'REVISAR';                       
-          return 'OPTIMO';                     
-        })()}                   
-      </DataValue>                 
-    </DataRow>               
-  </DataDisplayCard>             
-</ChartWithMonitorRow>
+{/* Monitor de Luminosidad */}
+              <DataDisplayCard>
+                <DataDisplayTitle>☀️ Luz</DataDisplayTitle>
+                <DataRow>
+                  <DataLabel>LUMINOSIDAD:</DataLabel>
+                  <DataValue>{luminosidad.at(-1) ? `${Math.round(luminosidad.at(-1))} lux` : '--'}</DataValue>
+                </DataRow>
+                <DataRow>
+                  <DataLabel>FOCO NORMAL:</DataLabel>
+                  <DataValue>{controlFoco ? 'ON' : 'OFF'}</DataValue>
+                </DataRow>
+                <DataRow>
+                  <DataLabel>STATUS:</DataLabel>
+                  <DataValue>
+                    {(() => {
+                      const luzActual = luminosidad.at(-1);
+                      if (!Number.isFinite(luzActual)) return 'NO_DATA';
+                      const luzEval = evaluarParametro(luzActual, LIMITES.luminosidad || { bajo: 200, alto: 1000 });
+                      if (luzEval.estado === "critico") return 'CRITICO';
+                      if (luzEval.estado === "revisar") return 'REVISAR';
+                      return 'OPTIMO';
+                    })()}
+                  </DataValue>
+                </DataRow>
+              </DataDisplayCard>
+            </ChartWithMonitorRow>         
 
-        {/* Gráfica de UV */}
+
+         {/* 🔧 GRÁFICA DE UV CORREGIDA */}
             <ChartWithMonitorRow>
               <ChartCard>
                 <ChartTitle>🔆 Radiación UV ({uviData.length} registros)</ChartTitle>
@@ -1128,9 +1347,16 @@ const Dashboard = () => {
                         },
                         y: { 
                           title: { display: true, text: "Índice UV" },
-                          min: 0,
-                          max: 3,
-                          grid: { color: "rgba(0,0,0,0.1)" }
+                          // 🔧 CORRECCIÓN: Línea centrada, no en el fondo
+                          min: -0.5, // Permitir valores negativos para centrar la línea
+                          max: 2.5,  // Rango más amplio
+                          grid: { color: "rgba(0,0,0,0.1)" },
+                          ticks: {
+                            stepSize: 0.5,
+                            callback: function(value) {
+                              return value.toFixed(1);
+                            }
+                          }
                         },
                       },
                     }}
@@ -1138,27 +1364,51 @@ const Dashboard = () => {
                 </ChartContainer>
               </ChartCard>
 
-              {/* Monitor de UV */}
-              <DataDisplayCard>
-                <DataDisplayTitle>🔆 UV</DataDisplayTitle>
-                <DataRow>
-                  <DataLabel>FOCO UV:</DataLabel>
-                  <DataValue>{controlUV ? 'ON' : 'OFF'}</DataValue>
-                </DataRow>
-                <DataRow>
-                  <DataLabel>STATUS:</DataLabel>
-                  <DataValue>
-                    {(() => {
-                      const uvActual = uviData.at(-1);
-                      if (!Number.isFinite(uvActual)) return 'NO_DATA';
-                      const uvEval = evaluarParametro(uvActual, { bajo: 0.5, alto: 1.5 });
-                      if (uvEval.estado === "critico") return 'CRITICO';
-                      if (uvEval.estado === "revisar") return 'REVISAR';
-                      return 'OPTIMO';
-                    })()}
-                  </DataValue>
-                </DataRow>
-              </DataDisplayCard>
+{/* Monitor de UV */}
+<DataDisplayCard>
+  <DataDisplayTitle>🔆 UV</DataDisplayTitle>
+
+  <DataRow>
+    <DataLabel>ÍNDICE UV:</DataLabel>
+    <DataValue>{uviData.at(-1) ? `${uviData.at(-1).toFixed(1)} UVI` : '--'}</DataValue>
+  </DataRow>
+
+  <DataRow>
+    <DataLabel>FOCO UV:</DataLabel>
+    <DataValue>{controlUV ? 'ON' : 'OFF'}</DataValue>
+  </DataRow>
+
+  <DataRow>
+    <DataLabel>CICLO:</DataLabel>
+    <DataValue>
+      {cicloDia === "dia" ? 'DIURNO' : cicloDia === "noche" ? 'NOCTURNO' : 'AMANECER'}
+    </DataValue>
+  </DataRow>
+
+  <DataRow>
+    <DataLabel>STATUS:</DataLabel>
+    <DataValue>
+      {(() => {
+        const uvActual = uviData.at(-1);
+        if (!Number.isFinite(uvActual)) {
+          return <>SIN DATOS <StatusIcon src={advertencia} /></>;
+        }
+
+        const limitesUV = LIMITES.luz_uv?.[cicloDia] || { min: 0, max: 0 };
+        const uvEval = evaluarParametro(uvActual, limitesUV);
+
+        if (uvEval.color === "red") {
+          return <>ESTADO CRÍTICO <StatusIcon src={peligro} /></>;
+        }
+        if (uvEval.color === "orange") {
+          return <>REVISAR UV <StatusIcon src={advertencia} /></>;
+        }
+        return <>ESTADO IDEAL <StatusIcon src={ok} /></>;
+      })()}
+    </DataValue>
+  </DataRow>
+</DataDisplayCard>
+
             </ChartWithMonitorRow>
 
           </LeftSection>
@@ -1189,7 +1439,7 @@ const Dashboard = () => {
               </ModeButtons>
 
               <ControlsGrid>
-              {/* Control de Luz UV */}
+              {/* Control de Luz UV - ESTADOS REALES */}
               <ControlSection disabled={modoAutomatico || !socketConnected}>
                 <ControlLabel>
                   <span>🔆</span>
@@ -1211,17 +1461,18 @@ const Dashboard = () => {
                    bloqueoUV ? "Procesando..." : 
                    (controlUV ? "Apagar " : "Encender ")}
                 </ControlButton>
+                {/* 🔧 ESTADO REAL DEL ACTUADOR */}
                 <PowerDisplay>
                   <strong>
                     {!socketConnected ? "❌ Desconectado" :
                      bloqueoUV ? "⏳ Procesando" : 
                      (controlUV ? "✅ Encendida" : "⭕ Apagada")}
                   </strong>
-                  {modoAutomatico && <span style={{color: '#28a745'}}> • Control automático</span>}
+                  {modoAutomatico && <span style={{color: '#28a745'}}> • Automático</span>}
                 </PowerDisplay>
               </ControlSection>
 
-              {/* Control de Foco Principal */}
+              {/* Control de Foco Principal - ESTADOS REALES */}
               <ControlSection disabled={modoAutomatico || !socketConnected}>
                 <ControlLabel>
                   <span>💡</span>
@@ -1243,17 +1494,18 @@ const Dashboard = () => {
                    bloqueoFoco ? "Procesando..." : 
                    (controlFoco ? "Apagar" : "Encender")}
                 </ControlButton>
+                {/* 🔧 ESTADO REAL DEL ACTUADOR */}
                 <PowerDisplay>
                   <strong>
                     {!socketConnected ? "❌ Desconectado" :
                      bloqueoFoco ? "⏳ Procesando" : 
                      (controlFoco ? "✅ Encendido" : "⭕ Apagado")}
                   </strong>
-                  {modoAutomatico && <span style={{color: '#28a745'}}> • Control automático</span>}
+                  {modoAutomatico && <span style={{color: '#28a745'}}> • Automático</span>}
                 </PowerDisplay>
               </ControlSection>
 
-              {/* Control de Humidificador */}
+              {/* Control de Humidificador - ESTADOS REALES */}
               <ControlSection disabled={modoAutomatico || !socketConnected}>
                 <ControlLabel>
                   <span>💧</span>
@@ -1275,18 +1527,19 @@ const Dashboard = () => {
                    bloqueoHumidificador ? "Procesando..." : 
                    (humidificador ? "Apagar" : "Encender")}
                 </ControlButton>
+                {/* 🔧 ESTADO REAL DEL ACTUADOR */}
                 <PowerDisplay>
                   <strong>
                     {!socketConnected ? "❌ Desconectado" :
                      bloqueoHumidificador ? "⏳ Procesando" : 
                      (humidificador ? "✅ Funcionando" : "⭕ Inactivo")}
                   </strong>
-                  {modoAutomatico && <span style={{color: '#28a745'}}> • Control automático</span>}
+                  {modoAutomatico && <span style={{color: '#28a745'}}> • Automático</span>}
                 </PowerDisplay>
               </ControlSection>
 
               </ControlsGrid>
-              {/* Control de Placa Térmica */}
+              {/* Control de Placa Térmica - ESTADO REAL */}
               <ControlSection disabled={modoAutomatico || !socketConnected}>
                 <ControlLabel>
                   <span>🔥</span>
@@ -1321,8 +1574,12 @@ const Dashboard = () => {
                     +
                   </NumericButton>
                 </NumericControl>
+                {/*  ESTADO REAL DE LA PLACA TÉRMICA */}
                 <PowerDisplay>
-                  Potencia: <strong>{placaTermica}%</strong>
+                  Potencia Real: <strong>{placaTermica}%</strong>
+                  {!modoAutomatico && placaTermica !== setPlacaTermica && (
+                    <span style={{color: '#ff9800'}}> • Enviando: {placaTermica}%</span>
+                  )}
                   {modoAutomatico && <span style={{color: '#28a745'}}> • Control automático</span>}
                 </PowerDisplay>
               </ControlSection>
@@ -1347,7 +1604,7 @@ const Dashboard = () => {
         )}
       </AnimatePresence>
 
-      {/* Información de Conexión - Fija en la parte inferior */}
+      {/* INFORMACIÓN DE CONEXIÓN MEJORADA */}
 <ConnectionInfo>
   ⏱️ <strong>Sesión activa:</strong> {elapsedTime} |
   🔄 <strong>Última actualización:</strong> {new Date().toLocaleTimeString("es-MX", {
@@ -1358,7 +1615,7 @@ const Dashboard = () => {
     timeZone: "America/Mexico_City",
   })} |
   🦎 <strong>Muda:</strong> {enMuda ? 'Sí' : 'No'} |
-   <strong>Modo:</strong> {modoAutomatico ? 'Automático' : 'Manual'} |
+      <strong>Modo:</strong> {modoAutomatico ? 'Automático' : 'Manual'} |
 </ConnectionInfo>
 
 
