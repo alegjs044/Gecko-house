@@ -16,8 +16,10 @@ import {
   PaginationButton, PaginationText, ChartWrapper, CycleInfo, CycleIndicator
 } from "../styles/historialStyles";
 
+// Configuración de Chart.js
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
+// Constantes globales
 const ITEMS_PER_PAGE = 10;
 const API_BASE_URL = "http://localhost:5004/api";
 const AUTO_REFRESH_INTERVAL = 30000;
@@ -64,6 +66,11 @@ const SearchModal = ({ show, onClose, searchTerm, resultsCount }) => {
   );
 };
 
+// ============================================
+// FUNCIONES UTILITARIAS
+// ============================================
+
+// Obtener datos del usuario desde localStorage
 const getUserData = () => {
   try {
     const userData = localStorage.getItem('userData');
@@ -74,6 +81,7 @@ const getUserData = () => {
   }
 };
 
+// Formateo de fechas y horas
 const formatDate = (dateTime) => {
   const date = new Date(dateTime);
   return `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1).toString().padStart(2, "0")}/${date.getFullYear()}`;
@@ -86,10 +94,10 @@ const formatTime = (dateTime) => {
 
 const formatDateTime = (dateTime) => `${formatDate(dateTime)} ${formatTime(dateTime)}`;
 
-// 🔧 CAMBIADO: Sin redondeo, mostrando 2 decimales
+// Formateo de valores con precisión
 const formatValue = (value, category) => {
   if (value === null || value === undefined) return "--";
-  const preciseValue = parseFloat(value).toFixed(2); // 🔧 2 decimales en lugar de redondeo
+  const preciseValue = parseFloat(value).toFixed(2);
   return {
     temperatura: `${preciseValue}°C`,
     humedad: `${preciseValue}%`,
@@ -97,6 +105,7 @@ const formatValue = (value, category) => {
   }[category] || preciseValue;
 };
 
+// Funciones de mapeo de texto
 const getCycleText = (ciclo) => ({ 
   dia: "Día", 
   noche: "Noche", 
@@ -123,15 +132,17 @@ const getCategoryTitle = (cat) => ({
   luz_uv: "Luz UV" 
 }[cat] || cat.charAt(0).toUpperCase() + cat.slice(1));
 
+// Colores para gráficos
 const getChartColors = (category) => ({
   temperatura: { fria: "#3498db", caliente: "#e67e22" },
   humedad: "#27ae60",
   luz_uv: "#8e44ad"
 }[category] || "#ff8c00");
 
+// Verificar estado de muda
 const isInMudaState = (estadoMuda) => estadoMuda === true || estadoMuda === 1;
 
-// Escalas fijas para evitar picos visuales exagerados
+// Rangos fijos para el eje Y del gráfico
 const getFixedYAxisRange = (category, filterZone = null) => {
   if (category === "temperatura") {
     if (filterZone === "fria") return { min: 18, max: 32 };
@@ -143,14 +154,14 @@ const getFixedYAxisRange = (category, filterZone = null) => {
   return { min: undefined, max: undefined };
 };
 
-// 🔧 CAMBIADO: Suavizado sin redondeo, mantiene precisión
+// Suavizado de datos para gráficos más estables
 const smoothForStraightLines = (data, threshold = 0.8) => {
   if (data.length <= 2) return data;
   
-  const smoothed = [parseFloat(data[0])]; // 🔧 Sin redondeo
+  const smoothed = [parseFloat(data[0])];
   
   for (let i = 1; i < data.length; i++) {
-    const current = parseFloat(data[i]); // 🔧 Sin redondeo
+    const current = parseFloat(data[i]);
     const previous = smoothed[smoothed.length - 1];
     
     if (Math.abs(current - previous) < threshold) {
@@ -163,7 +174,11 @@ const smoothForStraightLines = (data, threshold = 0.8) => {
   return smoothed;
 };
 
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 const Historial = () => {
+  // Estados principales
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [internalLoading, setInternalLoading] = useState(false);
@@ -171,31 +186,40 @@ const Historial = () => {
   const [cicloActual, setCicloActual] = useState('');
   const [estadoMudaActual, setEstadoMudaActual] = useState(null);
   
-  // 🔧 NUEVO: Estados de búsqueda
+  // Estados de búsqueda
   const [searchInput, setSearchInput] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
   const [showSearchModal, setShowSearchModal] = useState(false);
   
+  // Estados de filtros
   const [category, setCategory] = useState("temperatura");
   const [filterDate, setFilterDate] = useState("all");
   const [filterType, setFilterType] = useState("todos");
   const [filterZone, setFilterZone] = useState("todas");
   
+  // Estados de paginación y selección
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   
+  // Estados del gráfico
   const [maxRegistrosGrafico, setMaxRegistrosGrafico] = useState(50);
   const [inputRegistrosGrafico, setInputRegistrosGrafico] = useState('50');
   const [mostrarTodosEnGrafico, setMostrarTodosEnGrafico] = useState(false);
   
   const navigate = useNavigate();
 
+  // ============================================
+  // EFFECTS
+  // ============================================
+
+  // Verificar autenticación
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) navigate("/login");
   }, [navigate]);
 
+  // Carga inicial de datos
   useEffect(() => {
     let ignore = false;
     
@@ -242,7 +266,7 @@ const Historial = () => {
     return () => { ignore = true; };
   }, [category, navigate]);
 
-  // Auto-refresh silencioso
+  // Auto-refresh silencioso cada 30 segundos
   useEffect(() => {
     const intervalId = setInterval(async () => {
       try {
@@ -277,6 +301,7 @@ const Historial = () => {
     return () => clearInterval(intervalId);
   }, [category]);
 
+  // Reset de estados al cambiar categoría
   useEffect(() => {
     setCurrentPage(1);
     setSearchInput("");
@@ -284,7 +309,10 @@ const Historial = () => {
     setFilterZone("todas");
   }, [category]);
 
-  // 🔧 NUEVO: Función de búsqueda
+  // ============================================
+  // FUNCIONES DE BÚSQUEDA
+  // ============================================
+
   const handleSearchClick = () => {
     if (!searchInput.trim()) {
       alert("Por favor ingresa un término de búsqueda");
@@ -296,14 +324,16 @@ const Historial = () => {
     setShowSearchModal(true);
   };
 
-  // 🔧 NUEVO: Limpiar búsqueda
   const clearSearch = () => {
     setSearchInput("");
     setActiveSearch("");
     setCurrentPage(1);
   };
 
-  // 🔧 CORREGIDO: Eliminación de registros con validación de usuario
+  // ============================================
+  // FUNCIÓN DE ELIMINACIÓN CORREGIDA
+  // ============================================
+
   const deleteSelectedRecords = async () => {
     if (selectedItems.size === 0) return;
     if (!window.confirm(`¿Estás seguro de que deseas eliminar ${selectedItems.size} registro(s)?`)) return;
@@ -332,16 +362,18 @@ const Historial = () => {
         recordCount: selectedItems.size
       });
       
-      // Preparar el cuerpo de la petición con formato correcto
+      // ✅ CORRECCIÓN: ID_usuario como query parameter, solo IDs en el body
       const requestBody = {
-        ID_usuario: parseInt(userData.ID_usuario), // Asegurar que sea número
-        ids: Array.from(selectedItems).map(id => parseInt(id)), // Asegurar que los IDs sean números
-        categoria: category // Incluir categoría por si el backend la necesita
+        ids: Array.from(selectedItems).map(id => parseInt(id))
       };
       
+      // ✅ ID_usuario va en la URL como query parameter
+      const url = `${API_BASE_URL}/historial/${category}/registros?ID_usuario=${userData.ID_usuario}`;
+      
+      console.log('Request URL:', url);
       console.log('Request body:', requestBody);
       
-      const response = await fetch(`${API_BASE_URL}/historial/${category}/registros`, {
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: { 
           'Content-Type': 'application/json',
@@ -420,11 +452,14 @@ const Historial = () => {
     }
   };
 
-  // 🔧 MODIFICADO: Aplicar filtros incluyendo búsqueda
+  // ============================================
+  // FUNCIONES DE FILTRADO
+  // ============================================
+
   const applyFilters = (list) => {
     let filtered = list;
     
-    // 🔧 NUEVO: Filtro de búsqueda
+    // Filtro de búsqueda
     if (activeSearch) {
       const searchLower = activeSearch.toLowerCase();
       filtered = filtered.filter(item =>
@@ -435,6 +470,7 @@ const Historial = () => {
       );
     }
     
+    // Filtro de fecha
     if (filterDate !== "all") {
       const now = new Date();
       const daysAgo = { today: 0, last3days: 3, last7days: 7 }[filterDate] || 0;
@@ -443,12 +479,14 @@ const Historial = () => {
       filtered = filtered.filter(item => new Date(item.marca_tiempo) >= limitDate);
     }
     
+    // Filtro de tipo (crítico/normal)
     if (filterType !== "todos") {
       filtered = filtered.filter(item => 
         filterType === "criticos" ? item.es_critico === true : item.es_critico === false
       );
     }
     
+    // Filtro de zona (solo para temperatura)
     if (category === "temperatura" && filterZone !== "todas") {
       filtered = filtered.filter(item => {
         const zona = item.zona?.toLowerCase();
@@ -461,18 +499,9 @@ const Historial = () => {
     return filtered;
   };
 
-  const filtered = applyFilters(data);
-  
-  const getDataForChart = () => {
-    if (mostrarTodosEnGrafico) return filtered;
-    const sortedData = [...filtered].sort((a, b) => new Date(b.marca_tiempo) - new Date(a.marca_tiempo));
-    return sortedData.slice(0, maxRegistrosGrafico);
-  };
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedData = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  const allFilteredSelected = filtered.length > 0 && filtered.every(item => selectedItems.has(item.id));
+  // ============================================
+  // FUNCIONES DE SELECCIÓN Y PAGINACIÓN
+  // ============================================
 
   const handleCheckboxChange = (itemId, isChecked) => {
     const newSelected = new Set(selectedItems);
@@ -483,6 +512,16 @@ const Historial = () => {
 
   const handleSelectAllRecords = (isChecked) => {
     setSelectedItems(isChecked ? new Set(filtered.map(item => item.id)) : new Set());
+  };
+
+  // ============================================
+  // FUNCIONES DEL GRÁFICO
+  // ============================================
+
+  const getDataForChart = () => {
+    if (mostrarTodosEnGrafico) return filtered;
+    const sortedData = [...filtered].sort((a, b) => new Date(b.marca_tiempo) - new Date(a.marca_tiempo));
+    return sortedData.slice(0, maxRegistrosGrafico);
   };
 
   const handleInputRegistrosChange = (e) => {
@@ -498,166 +537,7 @@ const Historial = () => {
     setMostrarTodosEnGrafico(e.target.checked);
   };
 
-  const downloadPDF = () => {
-    try {
-      const doc = new jsPDF();
-      let y = 20;
-      
-      let title = `Historial de ${getCategoryTitle(category)} (${filterType})`;
-      if (category === "temperatura" && filterZone !== "todas") {
-        title += ` - Zona ${getZoneText(filterZone)}`;
-      }
-      // 🔧 NUEVO: Incluir término de búsqueda en PDF
-      if (activeSearch) {
-        title += ` - Búsqueda: "${activeSearch}"`;
-      }
-      
-      doc.setFontSize(16);
-      doc.setFont(undefined, 'bold');
-      doc.text(title, 20, y);
-      y += 15;
-      
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 20, y);
-      y += 8;
-      doc.text(`Total de registros: ${filtered.length}`, 20, y);
-      y += 15;
-      
-      doc.setFontSize(12);
-      doc.setFont(undefined, 'bold');
-      doc.text("Fecha/Hora", 20, y);
-      doc.text("Valor", 80, y);
-      
-      if (category === "temperatura") {
-        doc.text("Zona", 120, y);
-        doc.text("Ciclo", 150, y);
-        doc.text("Estado", 180, y);
-      } else if (category === "humedad") {
-        doc.text("Estado Muda", 120, y);
-        doc.text("Estado", 160, y);
-      } else if (category === "luz_uv") {
-        doc.text("Ciclo", 120, y);
-        doc.text("Estado", 160, y);
-      }
-      
-      y += 10;
-      doc.line(20, y, 190, y);
-      y += 5;
-
-      doc.setFontSize(9);
-      
-      filtered.forEach((item) => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
-        
-        if (item.es_critico) {
-          doc.setTextColor(231, 76, 60);
-          doc.setFont(undefined, 'bold');
-        } else {
-          doc.setTextColor(39, 174, 96);
-          doc.setFont(undefined, 'normal');
-        }
-        
-        const fechaCorta = formatDateTime(item.marca_tiempo).substring(0, 16);
-        doc.text(fechaCorta, 20, y);
-        doc.text(formatValue(item.medicion, category), 80, y);
-        
-        if (category === "temperatura") {
-          doc.text(getZoneText(item.zona), 120, y);
-          doc.text(getCycleText(item.ciclo || "dia"), 150, y);
-          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 180, y);
-        } else if (category === "humedad") {
-          doc.text(isInMudaState(item.estado_muda) ? "En muda" : "Normal", 120, y);
-          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 160, y);
-        } else if (category === "luz_uv") {
-          doc.text(getCycleText(item.ciclo || "dia"), 120, y);
-          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 160, y);
-        }
-        
-        y += 8;
-      });
-      
-      const timestamp = new Date().toISOString().slice(0, 10);
-      let filename = category === "temperatura" && filterZone !== "todas" 
-        ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.pdf`
-        : `historial_${category}_${filterType}_${timestamp}.pdf`;
-      
-      // 🔧 NUEVO: Incluir búsqueda en nombre de archivo
-      if (activeSearch) {
-        filename = filename.replace('.pdf', `_busqueda_${timestamp}.pdf`);
-      }
-      
-      doc.save(filename);
-      
-    } catch (error) {
-      console.error("Error generando PDF:", error);
-      alert("Error al generar el PDF. Inténtalo de nuevo.");
-    }
-  };
-
-  const downloadExcel = () => {
-    try {
-      let wsData;
-      
-      if (category === "temperatura") {
-        wsData = [
-          ["Fecha/Hora", "Valor", "Zona", "Ciclo", "Estado"],
-          ...filtered.map(item => [
-            formatDateTime(item.marca_tiempo),
-            formatValue(item.medicion, category),
-            getZoneText(item.zona),
-            item.ciclo || "dia",
-            item.es_critico ? "CRÍTICO" : "NORMAL"
-          ])
-        ];
-      } else if (category === "humedad") {
-        wsData = [
-          ["Fecha/Hora", "Valor", "Estado Muda", "Estado"],
-          ...filtered.map(item => [
-            formatDateTime(item.marca_tiempo),
-            formatValue(item.medicion, category),
-            isInMudaState(item.estado_muda) ? "En muda" : "Normal",
-            item.es_critico ? "CRÍTICO" : "NORMAL"
-          ])
-        ];
-      } else if (category === "luz_uv") {
-        wsData = [
-          ["Fecha/Hora", "Valor", "Ciclo", "Estado"],
-          ...filtered.map(item => [
-            formatDateTime(item.marca_tiempo),
-            formatValue(item.medicion, category),
-            item.ciclo || "dia",
-            item.es_critico ? "CRÍTICO" : "NORMAL"
-          ])
-        ];
-      }
-      
-      const worksheet = XLSX.utils.aoa_to_sheet(wsData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Historial");
-      
-      const timestamp = new Date().toISOString().slice(0, 10);
-      let filename = category === "temperatura" && filterZone !== "todas" 
-        ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.xlsx`
-        : `historial_${category}_${filterType}_${timestamp}.xlsx`;
-      
-      // 🔧 NUEVO: Incluir búsqueda en nombre de archivo
-      if (activeSearch) {
-        filename = filename.replace('.xlsx', `_busqueda_${timestamp}.xlsx`);
-      }
-      
-      XLSX.writeFile(workbook, filename);
-      
-    } catch (error) {
-      console.error("Error generando Excel:", error);
-      alert("Error al generar el Excel. Inténtalo de nuevo.");
-    }
-  };
-
-  // 🔧 CAMBIADO: getCurrentValue sin redondeo, con 2 decimales
+  // Obtener valor actual para mostrar en el gráfico
   const getCurrentValue = () => {
     const chartData = getDataForChart();
     if (chartData.length === 0) return "--";
@@ -688,6 +568,7 @@ const Historial = () => {
     return (valor !== null && valor !== undefined) ? parseFloat(valor).toFixed(2) : "--";
   };
 
+  // Preparar datos para Chart.js
   const prepareChartData = (data, category) => {
     const sortedData = [...data].sort((a, b) => new Date(a.marca_tiempo) - new Date(b.marca_tiempo));
     
@@ -812,7 +693,7 @@ const Historial = () => {
     }
   };
 
-  // 🔧 CAMBIADO: Opciones del gráfico sin redondeo, mostrando 2 decimales
+  // Opciones del gráfico
   const getChartOptions = (category, filterZone = null) => {
     const yAxisRange = getFixedYAxisRange(category, filterZone);
     
@@ -831,7 +712,6 @@ const Historial = () => {
               if (label) label += ': ';
               
               if (context.parsed.y !== null) {
-                // 🔧 Sin redondeo, mostrando 2 decimales
                 label += parseFloat(context.parsed.y).toFixed(2);
                 if (category === 'temperatura') label += '°C';
                 else if (category === 'humedad') label += '%';
@@ -866,7 +746,6 @@ const Historial = () => {
           grid: { color: '#f0f0f0', drawBorder: true },
           ticks: {
             callback: function(value) {
-              // 🔧 Sin redondeo en los ticks del eje Y, mostrando 2 decimales
               return `${parseFloat(value).toFixed(2)}${category === 'temperatura' ? '°C' : category === 'humedad' ? '%' : ''}`;
             },
             stepSize: category === "temperatura" ? 5 : category === "humedad" ? 10 : 0.5,
@@ -899,6 +778,170 @@ const Historial = () => {
     };
   };
 
+  // ============================================
+  // FUNCIONES DE DESCARGA
+  // ============================================
+
+  const downloadPDF = () => {
+    try {
+      const doc = new jsPDF();
+      let y = 20;
+      
+      let title = `Historial de ${getCategoryTitle(category)} (${filterType})`;
+      if (category === "temperatura" && filterZone !== "todas") {
+        title += ` - Zona ${getZoneText(filterZone)}`;
+      }
+      if (activeSearch) {
+        title += ` - Búsqueda: "${activeSearch}"`;
+      }
+      
+      doc.setFontSize(16);
+      doc.setFont(undefined, 'bold');
+      doc.text(title, 20, y);
+      y += 15;
+      
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 20, y);
+      y += 8;
+      doc.text(`Total de registros: ${filtered.length}`, 20, y);
+      y += 15;
+      
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text("Fecha/Hora", 20, y);
+      doc.text("Valor", 80, y);
+      
+      if (category === "temperatura") {
+        doc.text("Zona", 120, y);
+        doc.text("Ciclo", 150, y);
+        doc.text("Estado", 180, y);
+      } else if (category === "humedad") {
+        doc.text("Estado Muda", 120, y);
+        doc.text("Estado", 160, y);
+      } else if (category === "luz_uv") {
+        doc.text("Ciclo", 120, y);
+        doc.text("Estado", 160, y);
+      }
+      
+      y += 10;
+      doc.line(20, y, 190, y);
+      y += 5;
+
+      doc.setFontSize(9);
+      
+      filtered.forEach((item) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        if (item.es_critico) {
+          doc.setTextColor(231, 76, 60);
+          doc.setFont(undefined, 'bold');
+        } else {
+          doc.setTextColor(39, 174, 96);
+          doc.setFont(undefined, 'normal');
+        }
+        
+        const fechaCorta = formatDateTime(item.marca_tiempo).substring(0, 16);
+        doc.text(fechaCorta, 20, y);
+        doc.text(formatValue(item.medicion, category), 80, y);
+        
+        if (category === "temperatura") {
+          doc.text(getZoneText(item.zona), 120, y);
+          doc.text(getCycleText(item.ciclo || "dia"), 150, y);
+          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 180, y);
+        } else if (category === "humedad") {
+          doc.text(isInMudaState(item.estado_muda) ? "En muda" : "Normal", 120, y);
+          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 160, y);
+        } else if (category === "luz_uv") {
+          doc.text(getCycleText(item.ciclo || "dia"), 120, y);
+          doc.text(item.es_critico ? "CRÍTICO" : "NORMAL", 160, y);
+        }
+        
+        y += 8;
+      });
+      
+      const timestamp = new Date().toISOString().slice(0, 10);
+      let filename = category === "temperatura" && filterZone !== "todas" 
+        ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.pdf`
+        : `historial_${category}_${filterType}_${timestamp}.pdf`;
+      
+      if (activeSearch) {
+        filename = filename.replace('.pdf', `_busqueda_${timestamp}.pdf`);
+      }
+      
+      doc.save(filename);
+      
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      alert("Error al generar el PDF. Inténtalo de nuevo.");
+    }
+  };
+
+  const downloadExcel = () => {
+    try {
+      let wsData;
+      
+      if (category === "temperatura") {
+        wsData = [
+          ["Fecha/Hora", "Valor", "Zona", "Ciclo", "Estado"],
+          ...filtered.map(item => [
+            formatDateTime(item.marca_tiempo),
+            formatValue(item.medicion, category),
+            getZoneText(item.zona),
+            item.ciclo || "dia",
+            item.es_critico ? "CRÍTICO" : "NORMAL"
+          ])
+        ];
+      } else if (category === "humedad") {
+        wsData = [
+          ["Fecha/Hora", "Valor", "Estado Muda", "Estado"],
+          ...filtered.map(item => [
+            formatDateTime(item.marca_tiempo),
+            formatValue(item.medicion, category),
+            isInMudaState(item.estado_muda) ? "En muda" : "Normal",
+            item.es_critico ? "CRÍTICO" : "NORMAL"
+          ])
+        ];
+      } else if (category === "luz_uv") {
+        wsData = [
+          ["Fecha/Hora", "Valor", "Ciclo", "Estado"],
+          ...filtered.map(item => [
+            formatDateTime(item.marca_tiempo),
+            formatValue(item.medicion, category),
+            item.ciclo || "dia",
+            item.es_critico ? "CRÍTICO" : "NORMAL"
+          ])
+        ];
+      }
+      
+      const worksheet = XLSX.utils.aoa_to_sheet(wsData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Historial");
+      
+      const timestamp = new Date().toISOString().slice(0, 10);
+      let filename = category === "temperatura" && filterZone !== "todas" 
+        ? `historial_${category}_${filterZone}_${filterType}_${timestamp}.xlsx`
+        : `historial_${category}_${filterType}_${timestamp}.xlsx`;
+      
+      if (activeSearch) {
+        filename = filename.replace('.xlsx', `_busqueda_${timestamp}.xlsx`);
+      }
+      
+      XLSX.writeFile(workbook, filename);
+      
+    } catch (error) {
+      console.error("Error generando Excel:", error);
+      alert("Error al generar el Excel. Inténtalo de nuevo.");
+    }
+  };
+
+  // ============================================
+  // FUNCIONES AUXILIARES
+  // ============================================
+
   const getChartTitle = () => {
     let title = getCategoryTitle(category);
     if (category === "temperatura" && filterZone !== "todas") {
@@ -906,7 +949,6 @@ const Historial = () => {
     }
     title += ` - ${filterType}`;
     
-    // 🔧 NUEVO: Incluir búsqueda en título del gráfico
     if (activeSearch) {
       title += ` - Búsqueda: "${activeSearch}"`;
     }
@@ -953,6 +995,20 @@ const Historial = () => {
 
   const getTdComponent = (item) => item.es_critico ? CriticalTd : NormalTd;
 
+  // ============================================
+  // CÁLCULOS PRINCIPALES
+  // ============================================
+
+  const filtered = applyFilters(data);
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedData = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const allFilteredSelected = filtered.length > 0 && filtered.every(item => selectedItems.has(item.id));
+
+  // ============================================
+  // RENDER PRINCIPAL
+  // ============================================
+
   if (loading) {
     return (
       <PageContainer>
@@ -968,6 +1024,7 @@ const Historial = () => {
       <Header showUserIcon={true} />
       <Container>
         
+        {/* Banner informativo */}
         <InfoBanner>
           <InfoTitle>Historial completo de condiciones ambientales para tu gecko leopardo.</InfoTitle>
           <InfoSubtitle>
@@ -980,6 +1037,7 @@ const Historial = () => {
           </InfoSubtitle>
         </InfoBanner>
 
+        {/* Información del ciclo actual */}
         {limitesSistema && (
           <CycleInfo>
             <CycleIndicator ciclo={cicloActual}>{getCycleIcon(cicloActual)}</CycleIndicator>
@@ -987,6 +1045,7 @@ const Historial = () => {
           </CycleInfo>
         )}
 
+        {/* Controles y filtros */}
         <ControlsRow>
           <SelectGroup>
             <CategorySelect value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -1017,7 +1076,7 @@ const Historial = () => {
             </CategorySelect>
           </SelectGroup>
 
-          {/* 🔧 NUEVO: Sistema de búsqueda */}
+          {/* Sistema de búsqueda */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1', maxWidth: '400px' }}>
             <SearchInput
               type="text"
@@ -1043,13 +1102,14 @@ const Historial = () => {
             )}
           </div>
           
+          {/* Botones de descarga */}
           <ButtonsContainer>
             <DownloadButton onClick={downloadPDF}>📄 PDF</DownloadButton>
             <DownloadButton onClick={downloadExcel}>📊 Excel</DownloadButton>
           </ButtonsContainer>
         </ControlsRow>
 
-        {/* 🔧 NUEVO: Indicador de búsqueda activa */}
+        {/* Indicador de búsqueda activa */}
         {activeSearch && (
           <div style={{
             backgroundColor: '#e8f4fd', border: '1px solid #bee5eb', borderRadius: '5px',
@@ -1065,6 +1125,7 @@ const Historial = () => {
           </div>
         )}
 
+        {/* Controles de eliminación */}
         {selectedItems.size > 0 && (
           <ActionButtonsContainer>
             <SelectionText>{selectedItems.size} de {filtered.length} registro(s) seleccionado(s)</SelectionText>
@@ -1074,7 +1135,9 @@ const Historial = () => {
           </ActionButtonsContainer>
         )}
 
+        {/* Contenido principal: tabla y gráfico */}
         <ContentRow>
+          {/* Panel de tabla */}
           <DataPanel>
             <Table>
               <thead>
@@ -1133,7 +1196,6 @@ const Historial = () => {
                   <tr>
                     <Td colSpan={category === "temperatura" ? 5 : category === "humedad" ? 4 : 4} 
                         style={{ textAlign: "center", padding: "20px", fontStyle: "italic" }}>
-                      {/* 🔧 NUEVO: Mensaje personalizado para búsquedas */}
                       {activeSearch 
                         ? `No se encontraron registros de ${getCategoryTitle(category)} que coincidan con "${activeSearch}".`
                         : filterType === "todos" 
@@ -1146,6 +1208,7 @@ const Historial = () => {
               </tbody>
             </Table>
             
+            {/* Paginación */}
             {totalPages > 1 && (
               <Pagination>
                 <PaginationButton 
@@ -1167,6 +1230,7 @@ const Historial = () => {
             )}
           </DataPanel>
 
+          {/* Panel de gráfico */}
           <DataPanel>
             <ChartContainer>
               <ChartTitleContainer>
@@ -1187,6 +1251,7 @@ const Historial = () => {
                 />
               </ChartWrapper>
               
+              {/* Controles del gráfico */}
               <div style={{ 
                 marginBottom: '20px', 
                 display: 'flex', 
@@ -1235,7 +1300,7 @@ const Historial = () => {
           </DataPanel>
         </ContentRow>
 
-        {/* 🔧 NUEVO: Modal de búsqueda */}
+        {/* Modal de búsqueda */}
         <SearchModal 
           show={showSearchModal} 
           onClose={() => setShowSearchModal(false)}
